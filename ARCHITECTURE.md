@@ -73,8 +73,8 @@ TokDash deliberately avoids spreading engineering maintenance across redundant o
 14. **Qoder** (`~/.qoder/` — Qoder IDE, Work, and CLI unified)
 
 ### 3.2. Explicit Pruning & Ecosystem Decisions
-- **Qoder vs. Qwen Code**: Factually, Qwen Code and Qoder are distinct, actively evolving products within Alibaba's ecosystem (Qwen Code continues rapid standalone releases and supports installing Qoder plugins). However, from TokDash's product perspective, maintaining duplicate adapters for two overlapping Alibaba coding agent stacks is inefficient. TokDash canonically standardizes on **Qoder** as the first-class supported platform, deprecating the standalone Qwen Code scanner.
-- **De-scoped & Pruned Scanners**: `MiMoCode`, `Prime Agent`, `OpenClaw`, `Zed Quota`, and `Sub2API` have been cleanly pruned from active scanning pipelines.
+- **Qoder vs. Qwen Code**: Factually, Qwen Code and Qoder are distinct, actively evolving products within Alibaba's ecosystem (Qwen Code continues rapid standalone releases and supports installing Qoder plugins). However, from TokDash's product perspective, maintaining duplicate adapters for two overlapping Alibaba coding agent stacks is inefficient. TokDash canonically standardizes on **Qoder** as the first-class supported platform; the standalone Qwen Code scanner has been removed from the production core.
+- **De-scoped & Pruned Scanners**: `MiMoCode`, `Prime Agent`, `OpenClaw`, `Zed Quota`, and `Sub2API` have been physically removed from the production core, not merely hidden from runtime dispatch.
 - **Provider Quota Integrations**: Integrations like `Z.AI Quota` (serving GLM/ZCode) and `Antigravity Quota` are maintained as provider quota adapters rather than independent coding agents.
 
 ---

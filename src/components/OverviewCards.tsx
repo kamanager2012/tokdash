@@ -17,7 +17,7 @@ export function isToolKey(key: string, val: any): boolean {
 export const ALLOWED_TOOLS = [
   'codex', 'gemini', 'cursor', 'claude', 'opencode', 'codebuddy',
   'kimicode', 'grok', 'pi', 'hermes', 'qoder', 'deepseek_harness',
-  'qwencode', 'workbuddy', 'qoderwork', 'qodercli'
+  'workbuddy', 'qoderwork', 'qodercli'
 ];
 
 

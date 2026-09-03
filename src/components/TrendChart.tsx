@@ -10,9 +10,8 @@ interface TrendChartProps {
 
 const KNOWN_COST_TOOL_KEYS = new Set([
   'claude', 'codex', 'gemini', 'grok', 'grokbuild', 'cursor', 'codebuddy',
-  'opencode', 'hermes', 'openclaw', 'zcode', 'mimocode', 'pi',
-  'workbuddy', 'workbuddy_ai', 'deepseek_harness', 'qwencode',
-  'kimicode', 'prime_agent',
+  'opencode', 'hermes', 'zcode', 'pi', 'workbuddy', 'workbuddy_ai',
+  'deepseek_harness', 'kimicode',
 ]);
 
 export const TrendChart: React.FC<TrendChartProps> = ({ data }) => {
