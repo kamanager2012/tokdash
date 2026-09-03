@@ -35,10 +35,11 @@
     "build": "vite build",
     "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
-    "test": "python3 -m unittest discover -s tests -v",
+    "test": "pnpm run test:electron && pnpm run test:python",
     "test:python": "python3 -m unittest discover -s tests -v",
     "start": "electron electron/main.cjs",
-    "app": "vite build && electron electron/main.cjs"
+    "app": "vite build && electron electron/main.cjs",
+    "test:electron": "node --check electron/main.cjs && node --check electron/preload.cjs && node --check electron/ipc-security.cjs && node --test tests/electron-ipc.test.cjs"
   },
   "dependencies": {
     "clsx": "^2.1.1",
