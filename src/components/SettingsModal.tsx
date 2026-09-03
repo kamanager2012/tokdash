@@ -98,7 +98,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
             <div className="bg-slate-100 dark:bg-zinc-900/60 p-2.5 rounded-lg font-mono text-[10px] text-slate-600 dark:text-zinc-400 break-all space-y-1">
               <div>~/.config/tokdash/scan_cache.json (增量缓存)</div>
-              <div>/home/jamesoldman/tokdash/pricing_overrides.json (费率与别名覆写)</div>
+              <div>pricing_overrides.json (项目根目录下费率与别名覆写)</div>
             </div>
           </div>
         </div>

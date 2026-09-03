@@ -1,0 +1,32 @@
+name: Bug Report
+description: Report a problem or incorrect metrics calculation in TokDash
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for taking the time to report a bug in TokDash!
+  - type: input
+    id: tool
+    attributes:
+      label: Affected AI Tool / Environment
+      description: Which AI coding tool is affected (e.g. Codex, Claude Code, Grok, Kimi, Antigravity, etc.)?
+      placeholder: e.g. Claude Code v0.2.x on Ubuntu 24.04
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the issue is.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to see instead?
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant Logs or Screenshots
+      description: Paste any error messages from the Electron console or Python output. (Please remove personal tokens or private prompts!)

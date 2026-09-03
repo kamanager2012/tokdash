@@ -1,0 +1,19 @@
+name: Feature Request
+description: Suggest a new idea or new AI tool integration for TokDash
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: Thank you for suggesting a feature for TokDash!
+  - type: textarea
+    id: feature
+    attributes:
+      label: Proposed Feature or Tool Integration
+      description: Describe the feature or the new AI coding agent you'd like TokDash to monitor.
+    validations:
+      required: true
+  - type: textarea
+    id: context
+    attributes:
+      label: Use Case / Context
+      description: Why would this feature be useful for developers using Linux?

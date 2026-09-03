@@ -9867,7 +9867,7 @@ def fetch_cursor_official_quota():
                 "bonus_spend": round(pu.get("bonusSpend", 0) / 100.0, 2),
                 "percent_used": round(pu.get("totalPercentUsed", 0.0), 1),
                 "auto_percent_used": round(pu.get("autoPercentUsed", 0.0), 1),
-                "account": "jamesoldman2026@gmail.com"
+                "account": auth.get("email") or auth.get("userEmail") or data.get("userEmail") or "Cursor User"
             }
     except Exception:
         return None
