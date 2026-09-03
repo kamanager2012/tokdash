@@ -75,8 +75,4 @@ export const TOOL_DISPLAY_NAMES: Record<string, string> = {
   qoder:            'Qoder IDE',
   qoderwork:        'Qoder Work',
   qodercli:         'Qoder CLI',
-  qwencode:         'Qwen Code',
-  prime_agent:      'Prime Agent',
-  mimocode:         'MimoCode',
-  openclaw:         'OpenClaw',
 };

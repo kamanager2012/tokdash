@@ -6257,8 +6257,6 @@ def scan_provider_quotas(errors=None):
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
     all_scans = {
-        "zed": scan_zed_quota,
-        "sub2api": scan_sub2api_quota,
         "zai": scan_zai_quota,
         "antigravity": scan_antigravity_quota,
     }
@@ -9621,10 +9619,7 @@ def compute(return_cache=False):
     qcli = _safe_scan("qodercli", lambda: scan_qodercli(bounds, cache), _empty_qodercli, errors)
     hm = _safe_scan("hermes", lambda: scan_hermes(bounds, cache), _empty_hermes, errors)
     zc = _safe_scan("zcode", lambda: scan_zcode(bounds, cache), _empty_zcode, errors)
-    mc = _safe_scan("mimocode", lambda: scan_mimocode(bounds, cache), _empty_mimocode, errors)
-    oc = _safe_scan("openclaw", lambda: scan_openclaw(bounds, cache), _empty_openclaw, errors)
     pi = _safe_scan("pi", lambda: scan_pi(bounds, cache), _empty_pi, errors)
-    prime = _safe_scan("prime_agent", lambda: scan_prime_agent(bounds, cache), _empty_prime_agent, errors)
     wb = _safe_scan("workbuddy", lambda: scan_workbuddy(bounds, cache), _empty_workbuddy, errors)
     wbai = _safe_scan("workbuddy_ai", lambda: scan_workbuddy_ai(bounds, cache),
                       _empty_workbuddy, errors)
@@ -9633,10 +9628,15 @@ def compute(return_cache=False):
     dsh = _safe_scan("deepseek_harness", lambda: scan_deepseek_harness(bounds, cache),
                      _empty_deepseek_harness, errors)
     ocode = _safe_scan("opencode", lambda: scan_opencode(bounds, cache), _empty_opencode, errors)
-    qwc = _safe_scan("qwencode", lambda: scan_qwencode(bounds, cache), _empty_qwencode, errors)
     kimi = _safe_scan("kimicode", lambda: scan_kimicode(bounds, cache), _empty_kimicode, errors)
     cb = _safe_scan("codebuddy", lambda: scan_codebuddy(bounds, cache), _empty_workbuddy, errors)
     cursor_res = _safe_scan("cursor", lambda: scan_cursor(bounds, cache), lambda: {"ranges": _empty_token_ranges(), "model": "Composer 2.5"}, errors)
+    
+    # 清理已裁剪的小众/实验性扫描器残留缓存，不占用内存与 IO
+    for _pruned_key in ("mimocode", "openclaw", "prime_agent", "qwencode"):
+        if cache.pop(_pruned_key, None) is not None:
+            cache["_dirty"] = True
+
     _cache_dashboard_days(cache, _GEMINI_DAYS_CACHE_KEY, gm.get("days", {}))
     _cache_dashboard_days(cache, _GROK_DAYS_CACHE_KEY, gk.get("days", {}))
     _save_scan_cache(cache)
@@ -9743,16 +9743,7 @@ def compute(return_cache=False):
                 "reason": b["reason"], "cost": b["cost"], "sessions": b["sessions"],
                 "models": _format_token_models(b["models"])}
 
-    def openclaw_range(b):
-        denom = b["cr"] + b["cw"] + b["in"]
-        hit = (b["cr"] / denom * 100) if denom else 0.0
-        return {"tasks": b["tasks"], "completed": b["completed"], "failed": b["failed"],
-                "hit": hit, "in": b["in"], "out": b["out"], "cr": b["cr"], "cw": b["cw"],
-                "cost": b["cost"], "sessions": len(b["sessions"]),
-                "models": _format_token_models(b["models"])}
-
     hranges = {k: hermes_range(hm["ranges"][k]) for k in RANGE_KEYS}
-    oranges = {k: openclaw_range(oc["ranges"][k]) for k in RANGE_KEYS}
 
     def token_usage_range(b):
         denom = b["cr"] + b["cw"] + b["in"]
@@ -9762,9 +9753,7 @@ def compute(return_cache=False):
                 "models": _format_token_models(b["models"])}
 
     piranges = {k: token_usage_range(pi["ranges"][k]) for k in RANGE_KEYS}
-    paranges = {k: token_usage_range(prime["ranges"][k]) for k in RANGE_KEYS}
     zcranges = {k: token_usage_range(zc["ranges"][k]) for k in RANGE_KEYS}
-    mcranges = {k: token_usage_range(mc["ranges"][k]) for k in RANGE_KEYS}
     wbranges = {k: token_usage_range(wb["ranges"][k]) for k in RANGE_KEYS}
     wbairanges = {k: token_usage_range(wbai["ranges"][k]) for k in RANGE_KEYS}
     grok_bot_ranges = {
@@ -9780,7 +9769,6 @@ def compute(return_cache=False):
     }
     dshranges = {k: token_usage_range(dsh["ranges"][k]) for k in RANGE_KEYS}
     ocranges = {k: token_usage_range(ocode["ranges"][k]) for k in RANGE_KEYS}
-    qwcranges = {k: token_usage_range(qwc["ranges"][k]) for k in RANGE_KEYS}
     kimiranges = {k: token_usage_range(kimi["ranges"][k]) for k in RANGE_KEYS}
     cbranges = {k: token_usage_range(cb["ranges"][k]) for k in RANGE_KEYS}
     cursor_ranges = {k: token_usage_range(cursor_res["ranges"][k]) for k in RANGE_KEYS}
@@ -9794,8 +9782,6 @@ def compute(return_cache=False):
 
     plan = _safe_scan("claude_plan", scan_claude_plan, lambda: {}, errors) or {}
     grok_quota = _safe_scan("grok_quota", scan_grok_quota, lambda: {}, errors) or {}
-    qwenwork_quota = _safe_scan(
-        "qwenwork_quota", scan_qwenwork_quota, lambda: {}, errors) or {}
     provider_quotas = scan_provider_quotas(errors)
     _cache_dashboard_days(
         cache, _CURSOR_PROVIDER_DAYS_CACHE_KEY,
@@ -9844,8 +9830,6 @@ def compute(return_cache=False):
             "ranges": granges,
         },
         "antigravity": provider_quotas["antigravity"],
-        "zed": provider_quotas["zed"],
-        "sub2api": provider_quotas["sub2api"],
         "zai": provider_quotas["zai"],
         "grok": {
             "ranges": kranges,
@@ -9863,7 +9847,6 @@ def compute(return_cache=False):
             "ranges": grok_bot_ranges,
             "quota": provider_quotas["grok_bot"],
         },
-        "qwenwork": qwenwork_quota,
         "qoderwork": {
             "ranges": qwranges,
             "model": qd.get("model"),
@@ -9882,17 +9865,8 @@ def compute(return_cache=False):
         "zcode": {
             "ranges": zcranges,
         },
-        "mimocode": {
-            "ranges": mcranges,
-        },
-        "openclaw": {
-            "ranges": oranges,
-        },
         "pi": {
             "ranges": piranges,
-        },
-        "prime_agent": {
-            "ranges": paranges,
         },
         "workbuddy": {
             "ranges": wbranges,
@@ -9905,9 +9879,6 @@ def compute(return_cache=False):
         },
         "opencode": {
             "ranges": ocranges,
-        },
-        "qwencode": {
-            "ranges": qwcranges,
         },
         "kimicode": {
             "ranges": kimiranges,
@@ -9941,9 +9912,9 @@ def fetch_cursor_official_quota():
 
 def _recalc_costs(result):
     """只重算缺少权威账单的工具；已有日志成本的工具保留原值。"""
-    for tool_key in ("gemini", "grok", "hermes", "zcode", "mimocode", "workbuddy",
+    for tool_key in ("gemini", "grok", "hermes", "zcode", "workbuddy",
                      "workbuddy_ai",
-                     "deepseek_harness", "qwencode", "kimicode", "codebuddy", "cursor"):
+                     "deepseek_harness", "kimicode", "codebuddy", "cursor"):
         tool = result.get(tool_key)
         if not tool or "ranges" not in tool:
             continue
@@ -10997,10 +10968,9 @@ def build_daily_costs(period="all", refresh=True, _cache=None):
                                       "reason": codex_reason, "tool": "codex"}
 
     _TOOL_COST_KEYS = (
-        "claude", "codex", "gemini", "grok", "zcode", "mimocode", "pi",
+        "claude", "codex", "gemini", "grok", "zcode", "pi",
         "workbuddy", "workbuddy_ai", "deepseek_harness", "opencode",
-        "qwencode", "kimicode", "prime_agent", "hermes", "openclaw",
-        "cursor", "codebuddy"
+        "kimicode", "hermes", "cursor", "codebuddy"
     )
 
     daily = []

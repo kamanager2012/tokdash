@@ -28,7 +28,6 @@ const TOOL_META: Record<string, { name: string; icon: any; color: string; bg: st
   qoder:            { name: 'Qoder IDE',             icon: Sparkles,     color: 'text-blue-500',    bg: 'bg-blue-500/10 border-blue-500/20'     },
   qoderwork:        { name: 'Qoder Work',            icon: Sparkles,     color: 'text-blue-500',    bg: 'bg-blue-500/10 border-blue-500/20'     },
   qodercli:         { name: 'Qoder CLI',             icon: Terminal,     color: 'text-blue-500',    bg: 'bg-blue-500/10 border-blue-500/20'     },
-  qwencode:         { name: 'Qwen Code',             icon: Bot,          color: 'text-amber-500',   bg: 'bg-amber-500/10 border-amber-500/20'   },
 };
 
 export const MAINSTREAM_TOOLS = new Set([

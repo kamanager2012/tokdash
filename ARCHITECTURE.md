@@ -52,10 +52,37 @@ A structural comparison with peer projects (such as `vamshivittali76/Tokie`):
 
 ---
 
-## 3. The Two-Dimensional Provenance Matrix
+## 3. Product Boundary & Scoping Decision: The 14 First-Class Agents
 
-To guarantee uncompromised accounting integrity without conflating token measurements with pricing estimates, TokDash enforces a **Two-Dimensional Provenance Matrix**:
+TokDash deliberately avoids spreading engineering maintenance across redundant or experimental niche tools.
 
+### 3.1. The Canonical 14 Mainstream AI Coding Agents
+1. **Claude Code** (`~/.claude/projects/`)
+2. **Codex CLI** (`~/.codex/`)
+3. **Antigravity / Gemini** (AGY)
+4. **Cursor Composer** (`~/.config/Cursor/`)
+5. **Grok Build** (`~/.tokei/`, `~/.cc-switch/`)
+6. **Grok Bot** (`~/.grok-bot/` — maintained as an independent product, distinct from Grok Build)
+7. **Kimi Code** (`~/.kimi-code/`)
+8. **DeepSeek Harness** (`~/.dsh/`)
+9. **OpenCode** (`~/.opencode/`)
+10. **Hermes Agent** (`~/.hermes/`)
+11. **Pi Coding Agent** (`~/.pi/`)
+12. **GLM Code (ZCode)** (`~/.zcode/cli/db/db.sqlite`)
+13. **CodeBuddy / WorkBuddy** (`~/.codebuddy/`, `~/.workbuddy/`)
+14. **Qoder** (`~/.qoder/` — Qoder IDE, Work, and CLI unified)
+
+### 3.2. Explicit Pruning & Ecosystem Decisions
+- **Qoder vs. Qwen Code**: Factually, Qwen Code and Qoder are distinct, actively evolving products within Alibaba's ecosystem (Qwen Code continues rapid standalone releases and supports installing Qoder plugins). However, from TokDash's product perspective, maintaining duplicate adapters for two overlapping Alibaba coding agent stacks is inefficient. TokDash canonically standardizes on **Qoder** as the first-class supported platform, deprecating the standalone Qwen Code scanner.
+- **De-scoped & Pruned Scanners**: `MiMoCode`, `Prime Agent`, `OpenClaw`, `Zed Quota`, and `Sub2API` have been cleanly pruned from active scanning pipelines.
+- **Provider Quota Integrations**: Integrations like `Z.AI Quota` (serving GLM/ZCode) and `Antigravity Quota` are maintained as provider quota adapters rather than independent coding agents.
+
+---
+
+## 4. The Two-Dimensional Provenance Matrix
+ 
+ To guarantee uncompromised accounting integrity without conflating token measurements with pricing estimates, TokDash enforces a **Two-Dimensional Provenance Matrix**:
+ 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────────┐
 │                    TOKEE / TOKDASH TWO-DIMENSIONAL MATRIX                   │
@@ -77,15 +104,15 @@ To guarantee uncompromised accounting integrity without conflating token measure
 
 ---
 
-## 4. Subsystem Architecture
+## 5. Subsystem Architecture
 
-### 4.1. Ingestion Pipeline & Collector Contract
+### 5.1. Ingestion Pipeline & Collector Contract
 Each collector targeting a mainstream AI coding agent implements a predictable lifecycle:
 - **`detect() -> bool`**: Passively inspects standard file paths or processes without disk lock contention.
 - **`scan(since_offset) -> List[Record]`**: Idempotent, byte-offset guarded incremental scanner with EOF truncation resilience.
 - **`health() -> CollectorHealth`**: Reports permissions, file counts, and last activity timestamps to `tokdash doctor`.
 
-### 4.2. Quota & Subscription Domain Model
+### 5.2. Quota & Subscription Domain Model
 Moving beyond provider-specific `if-else` blocks, all rate limits are mapped to unified Quota Windows:
 ```typescript
 export interface QuotaWindow {
@@ -102,7 +129,7 @@ export interface QuotaWindow {
 }
 ```
 
-### 4.3. Self-Diagnostics Subsystem (`tokdash doctor`)
+### 5.3. Self-Diagnostics Subsystem (`tokdash doctor`)
 Provides instant visibility into local agent configurations:
 ```bash
 tokdash doctor
@@ -113,7 +140,7 @@ Inspects all 14 mainstream agents (Claude, Codex, Grok, Grok-Bot, Cursor, Antigr
 
 ---
 
-## 5. Engineering Invariants & Security Principles
+## 6. Engineering Invariants & Security Principles
 
 1. **Non-Negotiable Math Invariants**:
    - $\text{Total Cost} \equiv \sum \text{Tool Costs}$ within $\pm \$0.01$ floating point rounding error.
