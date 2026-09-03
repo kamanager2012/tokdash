@@ -34,6 +34,9 @@ jobs:
       - name: TypeScript Strict Typecheck
         run: pnpm run typecheck
 
+      - name: Electron IPC Boundary Verification
+        run: pnpm run test:electron
+
       - name: Frontend Build
         run: pnpm build
 
