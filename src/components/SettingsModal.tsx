@@ -21,10 +21,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setUpdating(true);
     setUpdateMsg(null);
     try {
-      await (window as any).tokdash?.updatePrices();
+      const bridge = window.tokdash;
+      if (!bridge) {
+        throw new Error('Electron IPC bridge unavailable');
+      }
+      await bridge.updatePrices();
       setUpdateMsg('价格表已更新至最新！');
-    } catch (e: any) {
-      setUpdateMsg('更新失败: ' + (e?.message || '网络错误'));
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : '网络错误';
+      setUpdateMsg('更新失败: ' + message);
     } finally {
       setUpdating(false);
     }
