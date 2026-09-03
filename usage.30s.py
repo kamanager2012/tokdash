@@ -11952,10 +11952,11 @@ def dashboard():
     print(json.dumps(build_dashboard(_arg_period()), ensure_ascii=False))
 
 
-def projects():
+def get_projects(refresh=True, _cache=None):
     """项目足迹:从缓存聚合所有项目路径、活跃时间、session 数、token、成本。"""
-    compute()
-    cache = _load_scan_cache()
+    if refresh:
+        compute()
+    cache = _cache if _cache is not None else _load_scan_cache()
 
     proj_map = {}  # path → {sessions, tokens, cost, last_active, model_tok}
 
@@ -12139,7 +12140,12 @@ def projects():
             entry["ports"] = sorted(port_map[path])
         result.append(entry)
     result.sort(key=lambda x: x["last_active"], reverse=True)
-    print(json.dumps(result, ensure_ascii=False))
+    return result
+
+
+def projects():
+    res = get_projects()
+    print(json.dumps(res, ensure_ascii=False))
 
 
 def _detect_local_servers(project_paths):
@@ -12199,6 +12205,30 @@ def _detect_local_servers(project_paths):
         return {}
 
 
+def snapshot():
+    """原子一致性快照: 仅执行单次 compute(), 在同一次扫描周期内生成 usage, daily_costs 和 projects。"""
+    import uuid
+    snap_id = str(uuid.uuid4())
+    gen_time = datetime.now().astimezone().isoformat()
+
+    usage_data = compute()
+    meta = _load_json(PRICING_FILE, {}).get("_meta", {})
+    usage_data["_pricing"] = {"updated_at": meta.get("updated_at", ""), "count": meta.get("count", 0)}
+
+    latest_cache = _load_scan_cache()
+    daily_data = build_daily_costs(_arg_period(), refresh=False, _cache=latest_cache)
+    projects_data = get_projects(refresh=False, _cache=latest_cache)
+
+    payload = {
+        "snapshot_id": snap_id,
+        "generated_at": gen_time,
+        "usage": usage_data,
+        "daily_costs": daily_data,
+        "projects": projects_data,
+    }
+    print(json.dumps(payload, ensure_ascii=False))
+
+
 if __name__ == "__main__":
     if "--update-prices" in sys.argv:
         sys.exit(update_prices())
@@ -12206,6 +12236,8 @@ if __name__ == "__main__":
         sys.exit(update_unknown())
     if "--dashboard" in sys.argv:
         dashboard()
+    elif "--snapshot" in sys.argv:
+        snapshot()
     elif "--quota-detail" in sys.argv:
         quota_detail()
     elif "--daily-costs" in sys.argv:

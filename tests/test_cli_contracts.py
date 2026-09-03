@@ -50,5 +50,22 @@ class TestCliContracts(unittest.TestCase):
             self.assertIn("tokens", first)
             self.assertIn("cost", first)
 
+    def test_cli_snapshot_contract(self):
+        res = self.run_cli("--snapshot")
+        self.assertEqual(res.returncode, 0, f"--snapshot failed with stderr: {res.stderr}")
+        
+        data = json.loads(res.stdout)
+        self.assertIsInstance(data, dict, "--snapshot must return a JSON dictionary")
+        self.assertIn("snapshot_id", data)
+        self.assertIn("generated_at", data)
+        self.assertIn("usage", data)
+        self.assertIn("daily_costs", data)
+        self.assertIn("projects", data)
+        
+        # Verify usage contains pricing metadata
+        self.assertIn("_pricing", data["usage"])
+        # Verify projects is a list
+        self.assertIsInstance(data["projects"], list)
+
 if __name__ == "__main__":
     unittest.main()

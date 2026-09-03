@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('tokdash', {
+  fetchSnapshot: () => ipcRenderer.invoke('get-snapshot'),
   fetchUsage: () => ipcRenderer.invoke('get-usage'),
   fetchDailyCosts: () => ipcRenderer.invoke('get-daily-costs'),
   fetchProjects: () => ipcRenderer.invoke('get-projects'),

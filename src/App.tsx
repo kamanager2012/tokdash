@@ -45,11 +45,31 @@ export const App: React.FC = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      if ((window as any).tokdash) {
+      const bridge = (window as any).tokdash;
+      if (bridge) {
+        if (typeof bridge.fetchSnapshot === 'function') {
+          // Unified Atomic Snapshot: 1 process, 1 compute(), zero lock contention
+          const snapshot = await bridge.fetchSnapshot();
+          if (snapshot && snapshot.usage) {
+            setUsage(snapshot.usage);
+            if (Array.isArray(snapshot.projects)) setProjects(snapshot.projects);
+            if (snapshot.daily_costs) {
+              if (Array.isArray(snapshot.daily_costs)) {
+                setDailyCosts(snapshot.daily_costs);
+              } else if (snapshot.daily_costs.daily) {
+                setDailyCosts(snapshot.daily_costs.daily);
+                if (snapshot.daily_costs.models) setTopModels(snapshot.daily_costs.models);
+              }
+            }
+            return;
+          }
+        }
+
+        // Fallback for legacy environment
         const [usageRes, dailyRes, projRes] = await Promise.all([
-          (window as any).tokdash.fetchUsage(),
-          (window as any).tokdash.fetchDailyCosts(),
-          (window as any).tokdash.fetchProjects(),
+          bridge.fetchUsage(),
+          bridge.fetchDailyCosts(),
+          bridge.fetchProjects(),
         ]);
         if (usageRes) setUsage(usageRes);
         if (projRes && Array.isArray(projRes)) setProjects(projRes);

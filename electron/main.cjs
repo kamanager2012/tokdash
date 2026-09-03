@@ -112,6 +112,10 @@ app.whenReady().then(() => {
   createTray();
   createWindow();
 
+  ipcMain.handle('get-snapshot', async () => {
+    return runPython(['--snapshot']);
+  });
+
   ipcMain.handle('get-usage', async () => {
     return runPython(['--json']);
   });
