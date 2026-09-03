@@ -673,7 +673,11 @@ def _save_scan_cache(cache):
 # 目的:CLI(如 Claude Code 默认 30 天清理)删除旧日志后,历史用量不再缩水。
 # 语义:现存日志实时计算为准;某天实时值低于账本(=日志被清)时,用账本兜底。
 # 独立于 scan cache 的版本机制,永不因解析器/缓存升级而失效。
-_LEDGER_FILE = os.path.join(HOME, ".tokei", "ledger.json")
+_LEDGER_FILE = (
+    os.environ.get("TOKDASH_LEDGER_FILE")
+    or os.environ.get("TOKEI_LEDGER_FILE")
+    or os.path.join(HOME, ".tokei", "ledger.json")
+)
 _LEDGER_VERSION = 1
 _LEDGER_FIELDS = ("in", "out", "cr", "cw", "reason", "cached", "cost")
 
@@ -2504,7 +2508,7 @@ def _codex_canonical_file_cache(file_cache):
     return canonical
 
 
-def scan_codex(bounds, cache):
+def scan_codex(bounds, cache, rollout_files=None):
     ledger_touch("codex")
     fc = cache.setdefault("codex", {})
     if _codex_migrate_event_cache(fc):
@@ -2512,7 +2516,8 @@ def scan_codex(bounds, cache):
     B = {k: {"in": 0, "cached": 0, "out": 0, "reason": 0, "cost": 0.0,
              "sessions": set(), "models": {}}
          for k in RANGE_KEYS}
-    rollout_files = _codex_rollout_files()
+    if rollout_files is None:
+        rollout_files = _codex_rollout_files()
     if not rollout_files:
         if fc:
             _codex_clear_event_cache(fc)
@@ -9894,22 +9899,33 @@ def _recalc_costs(result):
             for m in r["models"]:
                 name = m.get("name", "")
                 model_id = m.get("model_id")
-                price_id = (_exact_pricing_id(model_id) if isinstance(model_id, str) else None)
-                if not price_id:
-                    price_id = _pricing_id(name)
+                target_model = model_id if (isinstance(model_id, str) and model_id.strip()) else name
+                price_id, prov = resolve_pricing_entry(target_model)
+
                 authoritative_cost = float(m.get("cost", 0) or 0)
                 if tool_key == "hermes" and authoritative_cost:
                     total_cost += authoritative_cost
+                    m["pricing_provenance"] = "authoritative"
+                    m["pricing_source"] = "hermes_local_ledger"
+                    m["cost_kind"] = "authoritative_log"
                     if price_id:
                         price = _raw_price(price_id)
                         m["pin"] = price["in"]
                         m["pout"] = price["out"]
                     continue
-                if not price_id:
+
+                m["pricing_provenance"] = prov
+                m["pricing_source"] = price_id or target_model
+                m["cost_kind"] = "estimated_exact" if prov == "exact" else (
+                    "estimated_family_proxy" if prov == "family_proxy" else "unknown"
+                )
+
+                if not price_id or prov == "unknown":
                     total_cost += authoritative_cost
                     m["pin"] = 0
                     m["pout"] = 0
                     continue
+
                 p = _raw_price(price_id)
                 ti = m.get("in", 0)
                 to = m.get("out", 0)
@@ -10925,37 +10941,51 @@ def build_daily_costs(period="all", refresh=True, _cache=None):
         models["GPT-5.5 (Codex)"] = {"cost": round(codex_total, 2), "in": codex_in, "out": codex_out,
                                       "reason": codex_reason, "tool": "codex"}
 
-    daily = [{"date": dk, "claude": round(v["claude"], 2), "codex": round(v["codex"], 2),
-              "gemini": round(v["gemini"], 2), "grok": round(v["grok"], 2),
-              "cursor": round(v.get("cursor", 0.0), 2),
-              "codebuddy": round(v.get("codebuddy", 0.0), 2),
-              "opencode": round(v.get("opencode", 0.0), 2),
-              "hermes": round(v["hermes"], 2),
-              "openclaw": round(v["openclaw"], 2),
-              "zcode": round(v["zcode"], 2), "mimocode": round(v["mimocode"], 2), "pi": round(v["pi"], 2),
-              "workbuddy": round(v["workbuddy"], 2),
-              "workbuddy_ai": round(v["workbuddy_ai"], 2),
-              "deepseek_harness": round(v["deepseek_harness"], 2),
-              "qwencode": round(v["qwencode"], 2),
-              "kimicode": round(v["kimicode"], 2),
-              "prime_agent": round(v["prime_agent"], 2),
-              "total": round(v["claude"] + v["codex"] + v["gemini"] + v["grok"] + v["zcode"]
-                             + v["mimocode"] + v["pi"] + v["workbuddy"] + v["workbuddy_ai"]
-                             + v["deepseek_harness"] + v["opencode"] + v["qwencode"]
-                             + v["kimicode"] + v["prime_agent"] + v["hermes"]
-                             + v["openclaw"] + v.get("cursor", 0.0) + v.get("codebuddy", 0.0), 2),
-              "c_in": v["c_in"], "c_out": v["c_out"], "c_cr": v["c_cr"], "c_cw": v["c_cw"],
-              "x_in": v["x_in"], "x_out": v["x_out"], "x_cached": v["x_cached"], "x_reason": v["x_reason"],
-              "p_in": v["p_in"], "p_out": v["p_out"], "p_cr": v["p_cr"], "p_cw": v["p_cw"], "p_reason": v["p_reason"],
-               "pa_in": v["pa_in"], "pa_out": v["pa_out"], "pa_cr": v["pa_cr"], "pa_cw": v["pa_cw"], "pa_reason": v["pa_reason"],
-              "w_in": v["w_in"], "w_out": v["w_out"], "w_cr": v["w_cr"], "w_cw": v["w_cw"],
-              "wa_in": v["wa_in"], "wa_out": v["wa_out"], "wa_cr": v["wa_cr"], "wa_cw": v["wa_cw"],
-              "d_in": v["d_in"], "d_out": v["d_out"], "d_cr": v["d_cr"],
-              "d_cw": v["d_cw"], "d_reason": v["d_reason"],
-              "q_in": v["q_in"], "q_out": v["q_out"], "q_cr": v["q_cr"], "q_reason": v["q_reason"],
-              "g_in": v["g_in"], "g_out": v["g_out"], "g_cr": v["g_cr"], "g_reason": v["g_reason"],
-              "tokens": v["tokens"]}
-             for dk, v in sorted(days.items())]
+    _TOOL_COST_KEYS = (
+        "claude", "codex", "gemini", "grok", "zcode", "mimocode", "pi",
+        "workbuddy", "workbuddy_ai", "deepseek_harness", "opencode",
+        "qwencode", "kimicode", "prime_agent", "hermes", "openclaw",
+        "cursor", "codebuddy"
+    )
+
+    daily = []
+    for dk, v in sorted(days.items()):
+        tool_costs = {
+            t: round(v.get(t, 0.0), 2)
+            for t in _TOOL_COST_KEYS
+            if round(v.get(t, 0.0), 2) > 0
+        }
+        total_cost = round(sum(v.get(t, 0.0) for t in _TOOL_COST_KEYS), 2)
+        daily.append({
+            "date": dk,
+            "total": total_cost,
+            "tokens": v["tokens"],
+            "tool_costs": tool_costs,
+            "claude": round(v["claude"], 2), "codex": round(v["codex"], 2),
+            "gemini": round(v["gemini"], 2), "grok": round(v["grok"], 2),
+            "cursor": round(v.get("cursor", 0.0), 2),
+            "codebuddy": round(v.get("codebuddy", 0.0), 2),
+            "opencode": round(v.get("opencode", 0.0), 2),
+            "hermes": round(v["hermes"], 2),
+            "openclaw": round(v["openclaw"], 2),
+            "zcode": round(v["zcode"], 2), "mimocode": round(v["mimocode"], 2), "pi": round(v["pi"], 2),
+            "workbuddy": round(v["workbuddy"], 2),
+            "workbuddy_ai": round(v["workbuddy_ai"], 2),
+            "deepseek_harness": round(v["deepseek_harness"], 2),
+            "qwencode": round(v["qwencode"], 2),
+            "kimicode": round(v["kimicode"], 2),
+            "prime_agent": round(v["prime_agent"], 2),
+            "c_in": v["c_in"], "c_out": v["c_out"], "c_cr": v["c_cr"], "c_cw": v["c_cw"],
+            "x_in": v["x_in"], "x_out": v["x_out"], "x_cached": v["x_cached"], "x_reason": v["x_reason"],
+            "p_in": v["p_in"], "p_out": v["p_out"], "p_cr": v["p_cr"], "p_cw": v["p_cw"], "p_reason": v["p_reason"],
+            "pa_in": v["pa_in"], "pa_out": v["pa_out"], "pa_cr": v["pa_cr"], "pa_cw": v["pa_cw"], "pa_reason": v["pa_reason"],
+            "w_in": v["w_in"], "w_out": v["w_out"], "w_cr": v["w_cr"], "w_cw": v["w_cw"],
+            "wa_in": v["wa_in"], "wa_out": v["wa_out"], "wa_cr": v["wa_cr"], "wa_cw": v["wa_cw"],
+            "d_in": v["d_in"], "d_out": v["d_out"], "d_cr": v["d_cr"],
+            "d_cw": v["d_cw"], "d_reason": v["d_reason"],
+            "q_in": v["q_in"], "q_out": v["q_out"], "q_cr": v["q_cr"], "q_reason": v["q_reason"],
+            "g_in": v["g_in"], "g_out": v["g_out"], "g_cr": v["g_cr"], "g_reason": v["g_reason"],
+        })
 
     def model_tokens(v):
         if v.get("tool") == "codex":
@@ -12243,9 +12273,28 @@ def _detect_local_servers(project_paths):
         return {}
 
 
+def _compute_state_digest(usage_data, daily_data):
+    """计算确定性数据世代摘要 (SHA-256)，检测并验证快照源自同一数据世代。"""
+    import hashlib
+    summary = []
+    for k in sorted(usage_data.keys()):
+        if k.startswith("_"):
+            continue
+        ranges = (usage_data.get(k) or {}).get("ranges", {})
+        all_r = ranges.get("all", {})
+        summary.append(f"{k}:{all_r.get('in', 0)}:{all_r.get('out', 0)}:{all_r.get('cr', 0)}:{all_r.get('cost', 0)}")
+    
+    days_list = daily_data.get("daily", []) if isinstance(daily_data, dict) else (daily_data if isinstance(daily_data, list) else [])
+    if days_list:
+        last_day = days_list[-1]
+        summary.append(f"daily:{last_day.get('date')}:{last_day.get('total')}:{last_day.get('tokens')}")
+    raw_payload = "|".join(summary).encode("utf-8")
+    return hashlib.sha256(raw_payload).hexdigest()[:16]
+
+
 def snapshot():
     """原子一致性快照: 仅执行单次 compute(), 在单一内存世代内派生 usage, daily_costs 和 projects。"""
-    import uuid, hashlib
+    import uuid
     snap_id = str(uuid.uuid4())
     gen_time = datetime.now().astimezone().isoformat()
 
@@ -12258,7 +12307,8 @@ def snapshot():
     daily_data = build_daily_costs(_arg_period(), refresh=False, _cache=latest_cache)
     projects_data = get_projects(refresh=False, _cache=latest_cache)
 
-    gen_token = hashlib.sha256(f"{snap_id}:{len(latest_cache)}".encode("utf-8")).hexdigest()[:16]
+    # 3. 真实计算基于该内存世代数据的确定性 SHA-256 状态摘要
+    gen_token = _compute_state_digest(usage_data, daily_data)
 
     payload = {
         "snapshot_id": snap_id,

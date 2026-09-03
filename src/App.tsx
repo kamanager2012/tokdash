@@ -185,7 +185,7 @@ export const App: React.FC = () => {
                   <AlertTriangle className="w-4 h-4 flex-shrink-0 text-amber-500" />
                   <span>
                     部分工具采集异常（已降级为不可用，非零用量）：
-                    <strong> {Object.keys(usage._errors).join(', ')}</strong>
+                    <strong> {Object.keys(usage._errors || {}).join(', ')}</strong>
                   </span>
                 </div>
                 <button

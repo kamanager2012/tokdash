@@ -8,7 +8,7 @@ on:
 
 jobs:
   validate:
-    name: Lint & Build Verification
+    name: TypeScript & Python Verification
     runs-on: ubuntu-latest
 
     steps:
@@ -31,8 +31,8 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Code Lint & Typecheck
-        run: pnpm run lint
+      - name: TypeScript Strict Typecheck
+        run: pnpm run typecheck
 
       - name: Frontend Build
         run: pnpm build

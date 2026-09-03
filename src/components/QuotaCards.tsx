@@ -1,5 +1,5 @@
 import React from 'react';
-import { UsageReport } from '../types';
+import { UsageReport, CursorQuota, CursorQuotaWindow, CursorQuotaDetail } from '../types';
 import { ShieldCheck, Clock, Sparkles, Terminal, MessageSquare } from 'lucide-react';
 
 interface QuotaCardsProps {
@@ -21,10 +21,10 @@ function formatCountdown(epochSeconds: number | null): string {
 }
 
 export const QuotaCards: React.FC<QuotaCardsProps> = ({ usage }) => {
-  const ag = (usage as any).antigravity;
-  const codex = (usage as any).codex;
-  const grok = (usage as any).grok;
-  const cursor = (usage as any).cursor_quota;
+  const ag = usage.antigravity;
+  const codex = usage.codex;
+  const grok = usage.grok;
+  const cursor: CursorQuota | undefined = usage.cursor_quota;
 
   if (!ag && !codex && !grok && !cursor) return null;
 
@@ -168,7 +168,7 @@ export const QuotaCards: React.FC<QuotaCardsProps> = ({ usage }) => {
 
         {/* Cursor Official Quota Card */}
         {cursor && cursor.available && (() => {
-          const totalWindow = cursor.windows?.find((w: any) => w.id === 'cursor-total') || cursor.windows?.[0];
+          const totalWindow = cursor.windows?.find((w: CursorQuotaWindow) => w.id === 'cursor-total') || cursor.windows?.[0];
           const usedPct = totalWindow?.used_pct ?? cursor.percent_used ?? 0;
           const resetTime = totalWindow?.reset ?? cursor.end;
           
@@ -177,8 +177,8 @@ export const QuotaCards: React.FC<QuotaCardsProps> = ({ usage }) => {
           const displayPlan = rawPlan.toLowerCase().startsWith('cursor ') ? rawPlan : `Cursor ${rawPlan}`;
 
           // Detailed metrics resolution
-          const packageDetail = cursor.details?.find((d: any) => d.label === '套餐用量')?.value;
-          const budgetDetail = cursor.details?.find((d: any) => d.label === '按量预算')?.value;
+          const packageDetail = cursor.details?.find((d: CursorQuotaDetail) => d.label === '套餐用量')?.value;
+          const budgetDetail = cursor.details?.find((d: CursorQuotaDetail) => d.label === '按量预算')?.value;
           const spendText = packageDetail || (cursor.total_spend !== undefined ? `$${cursor.total_spend}` : null);
           const subText = budgetDetail ? `按量: ${budgetDetail}` : (
             cursor.included_spend !== undefined

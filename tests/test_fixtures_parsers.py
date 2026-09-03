@@ -71,48 +71,61 @@ class TestFixtureParsers(unittest.TestCase):
         )
         self.assertAlmostEqual(total_cost, expected_cost, places=5)
 
-    def test_codex_fixture_passes_through_production_iter_parser(self):
+    def test_codex_fixture_passes_through_production_iter_parser_and_dedupe(self):
         fixture_path = os.path.join(FIXTURES_DIR, "codex", "rollout_standard.jsonl")
         self.assertTrue(os.path.isfile(fixture_path), "Codex fixture file must exist")
 
         models_detected = []
         token_records = []
 
-        # CALL REAL PRODUCTION PARSER ENGINE
+        # 1. CALL REAL PRODUCTION STREAM PARSER ENGINE
         for record_kind, record in self._iter_codex_usage_records(fixture_path):
             if record_kind == "model":
                 models_detected.append(record)
             elif record_kind == "token":
                 token_records.append(json.loads(record.decode("utf-8")))
 
-        # Verify production parser correctly extracted model and token count lines
         self.assertIn("openai/gpt-5.5", models_detected)
         self.assertEqual(len(token_records), 3, "Production parser must yield exactly 3 token events")
 
-        # Now test production deduplication & accounting logic on these raw emitted records
-        deduped = []
-        prev_total_key = None
-        for o in token_records:
-            info = (o.get("payload") or {}).get("info") or {}
-            total = info.get("total_token_usage") or {}
-            total_key = (
-                total.get("input_tokens", 0) or 0,
-                total.get("cached_input_tokens", 0) or 0,
-                total.get("output_tokens", 0) or 0,
-                total.get("reasoning_output_tokens", 0) or 0
-            )
-            if total_key == prev_total_key:
-                continue
-            prev_total_key = total_key
-            deduped.append(info.get("last_token_usage"))
-
-        self.assertEqual(len(deduped), 2, "Second duplicate cumulative record must be dropped by dedupe rule")
+        # 2. RUN FULL PRODUCTION SCAN_CODEX AGGREGATION & DEDUPE PIPELINE
+        scan_codex = getattr(usage_module, "scan_codex")
+        range_bounds = getattr(usage_module, "range_bounds")
+        _LEDGER_CACHE = getattr(usage_module, "_LEDGER_CACHE")
         
-        # Accounting check: output_tokens contains reasoning_output_tokens
-        for rec in deduped:
-            out_tok = rec.get("output_tokens", 0)
-            reason_tok = rec.get("reasoning_output_tokens", 0)
-            self.assertGreaterEqual(out_tok, reason_tok, "Output tokens must encapsulate reasoning tokens")
+        bounds = range_bounds()
+        isolated_cache = {}
+        
+        # Isolate ledger from local machine history
+        old_ledger_file = getattr(usage_module, "_LEDGER_FILE")
+        old_ledger_data = _LEDGER_CACHE["data"]
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            try:
+                setattr(usage_module, "_LEDGER_FILE", os.path.join(tmpdir, "isolated_ledger.json"))
+                _LEDGER_CACHE["data"] = {"v": 1, "tools": {}}
+                result = scan_codex(bounds, isolated_cache, rollout_files=[fixture_path])
+            finally:
+                setattr(usage_module, "_LEDGER_FILE", old_ledger_file)
+                _LEDGER_CACHE["data"] = old_ledger_data
+
+        all_range = result["ranges"]["all"]
+
+        # Production deduplication must discard the duplicated cumulative snapshot
+        # Turn 1: in=3000, cached=1000, out=400, reason=150
+        # Turn 2: duplicate snapshot (dropped)
+        # Turn 3: in=4200, cached=3000, out=600, reason=200
+        # Expected: in=7200, cached=4000, out=1000, reason=350
+        self.assertEqual(all_range["in"], 3000 + 4200)
+        self.assertEqual(all_range["cached"], 1000 + 3000)
+        self.assertEqual(all_range["out"], 400 + 600)
+        self.assertEqual(all_range["reason"], 150 + 200)
+
+        # Output tokens encapsulates reasoning output tokens
+        self.assertGreaterEqual(all_range["out"], all_range["reason"])
+        
+        # Verify event cache was actually created in isolated_cache
+        self.assertIn("codex", isolated_cache)
 
 if __name__ == "__main__":
     unittest.main()

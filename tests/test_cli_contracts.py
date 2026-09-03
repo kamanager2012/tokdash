@@ -37,6 +37,13 @@ class TestCliContracts(unittest.TestCase):
         self.assertIn("models", data, "Response must contain 'models' array")
         self.assertIsInstance(data["daily"], list)
         self.assertIsInstance(data["models"], list)
+        if len(data["daily"]) > 0:
+            first = data["daily"][0]
+            self.assertIn("tool_costs", first, "Daily record must contain 'tool_costs' dictionary")
+            self.assertIsInstance(first["tool_costs"], dict)
+            # Ensure sum of tool_costs matches or approximates total without token counters inflating
+            self.assertIn("total", first)
+            self.assertIn("tokens", first)
 
     def test_cli_projects_contract(self):
         res = self.run_cli("--projects")
@@ -63,9 +70,10 @@ class TestCliContracts(unittest.TestCase):
         self.assertIn("daily_costs", data)
         self.assertIn("projects", data)
         
-        # Verify generation token is a non-empty string
+        # Verify generation token is a valid 16-character hex SHA-256 digest
         self.assertIsInstance(data["generation"], str)
-        self.assertGreater(len(data["generation"]), 0)
+        self.assertEqual(len(data["generation"]), 16)
+        int(data["generation"], 16)  # Must be valid hex
 
         # Verify usage contains pricing metadata
         self.assertIn("_pricing", data["usage"])

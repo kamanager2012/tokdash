@@ -29,6 +29,9 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({ usage, period }) =
   let totalReason = 0;
   let totalSessions = 0;
   let totalTokens = 0;
+  let hasEstimated = false;
+  let estimatedTokens = 0;
+  let estimatedCost = 0;
 
   Object.entries(usage).forEach(([key, val]) => {
     // Dynamically aggregate every scanned AI tool, eliminating hardcoded drop-off
@@ -48,8 +51,16 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({ usage, period }) =
     totalReason += reasonVal;
     totalSessions += r.sessions || 0;
 
-    // Use unified accounting: Codex reasoning is inside out, do not double-count
-    totalTokens += calculateTotalTokens(key, inVal + crVal, outVal, reasonVal);
+    const toolTok = calculateTotalTokens(key, inVal + crVal, outVal, reasonVal);
+    totalTokens += toolTok;
+
+    if (val.estimated || key === 'cursor') {
+      if (toolTok > 0 || (r.cost || 0) > 0) {
+        hasEstimated = true;
+        estimatedTokens += toolTok;
+        estimatedCost += (r.cost || 0);
+      }
+    }
   });
 
   const totalPrompt = totalUncachedIn + totalCacheRead;
@@ -62,29 +73,49 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({ usage, period }) =
       {/* Total Cost */}
       <div className="bg-white dark:bg-gradient-to-b dark:from-[#1c1c24] dark:to-[#15151c] border border-slate-200 dark:border-zinc-800/80 rounded-xl p-4 shadow-sm hover:border-slate-300 dark:hover:border-zinc-700 transition-all">
         <div className="flex items-center justify-between text-slate-500 dark:text-zinc-400 mb-2">
-          <span className="text-xs font-medium">总 API 消耗</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-medium">总 API 消耗</span>
+            {hasEstimated && (
+              <span
+                className="text-[9px] px-1 py-0.2 rounded bg-sky-500/10 text-sky-600 dark:text-sky-400 font-medium"
+                title={`包含 Cursor 等推算估算费用约 $${estimatedCost.toFixed(2)}`}
+              >
+                含推算
+              </span>
+            )}
+          </div>
           <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-500 flex items-center justify-center">
             <DollarSign className="w-4 h-4" />
           </div>
         </div>
         <div className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white font-mono">
-          ${totalCost.toFixed(2)}
+          {hasEstimated ? '~' : ''}${totalCost.toFixed(2)}
         </div>
         <div className="mt-1 text-[11px] text-slate-400 dark:text-zinc-400">
-          基于官方与开源真实费率
+          {hasEstimated ? '官方费率与启发式推算结合' : '基于官方与开源真实费率'}
         </div>
       </div>
 
       {/* Total Tokens */}
       <div className="bg-white dark:bg-gradient-to-b dark:from-[#1c1c24] dark:to-[#15151c] border border-slate-200 dark:border-zinc-800/80 rounded-xl p-4 shadow-sm hover:border-slate-300 dark:hover:border-zinc-700 transition-all">
         <div className="flex items-center justify-between text-slate-500 dark:text-zinc-400 mb-2">
-          <span className="text-xs font-medium">吞吐总 Token</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-medium">吞吐总 Token</span>
+            {hasEstimated && (
+              <span
+                className="text-[9px] px-1 py-0.2 rounded bg-sky-500/10 text-sky-600 dark:text-sky-400 font-medium"
+                title={`包含 Cursor 等字符启发式推算约 ${formatTokens(estimatedTokens)}`}
+              >
+                含推算
+              </span>
+            )}
+          </div>
           <div className="w-7 h-7 rounded-lg bg-sky-500/10 text-sky-500 flex items-center justify-center">
             <Cpu className="w-4 h-4" />
           </div>
         </div>
         <div className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white font-mono">
-          {formatTokens(totalTokens)}
+          {hasEstimated ? '~' : ''}{formatTokens(totalTokens)}
         </div>
         <div className="mt-1 text-[11px] text-slate-400 dark:text-zinc-400 flex items-center gap-1.5">
           <span>总入: {formatTokens(totalPrompt)}</span>

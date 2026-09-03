@@ -76,6 +76,7 @@ export const ModelBreakdown: React.FC<ModelBreakdownProps> = ({ models = [] }) =
             {displayedModels.map((m, idx) => {
               const cacheRead = getCacheReadTokens(m);
               const barWidth = Math.min(100, Math.max(3, ((m.tokens || 0) / maxTokens) * 100));
+              const isHeuristic = m.tool?.toLowerCase() === 'cursor' || m.name.includes('(Cursor)');
 
               return (
                 <tr key={idx} className="hover:bg-slate-50 dark:hover:bg-zinc-800/20 transition-colors">
@@ -86,10 +87,18 @@ export const ModelBreakdown: React.FC<ModelBreakdownProps> = ({ models = [] }) =
                       <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 dark:bg-zinc-800 text-slate-500 dark:text-zinc-400 uppercase font-mono">
                         {m.tool}
                       </span>
+                      {isHeuristic && (
+                        <span
+                          className="text-[9px] px-1 py-0.2 rounded bg-sky-500/10 text-sky-600 dark:text-sky-400 font-sans"
+                          title="基于本地字符数启发式推算 (chars/4)，非官方精确账单"
+                        >
+                          推算
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="py-2.5 text-right font-bold text-slate-900 dark:text-zinc-100">
-                    {formatTokens(m.tokens || 0)}
+                    {isHeuristic ? '~' : ''}{formatTokens(m.tokens || 0)}
                   </td>
                   <td className="py-2.5 text-right text-slate-700 dark:text-zinc-300">
                     {formatTokens(m.in || 0)}
@@ -101,7 +110,7 @@ export const ModelBreakdown: React.FC<ModelBreakdownProps> = ({ models = [] }) =
                     {formatTokens(cacheRead)}
                   </td>
                   <td className="py-2.5 text-right font-semibold text-emerald-600 dark:text-emerald-400">
-                    ${(m.cost || 0).toFixed(2)}
+                    {isHeuristic ? '~' : ''}${(m.cost || 0).toFixed(2)}
                   </td>
                   <td className="py-2.5 text-right">
                     <div className="flex items-center justify-end gap-2">

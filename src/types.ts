@@ -23,6 +23,9 @@ export interface ModelUsage {
   cost: number;
   pin?: number;
   pout?: number;
+  pricing_provenance?: 'exact' | 'family_proxy' | 'authoritative' | 'unknown';
+  pricing_source?: string;
+  cost_kind?: string;
 }
 
 export interface ToolRange {
@@ -41,12 +44,21 @@ export interface ToolData {
   ranges: Record<Period, ToolRange>;
 }
 
-export type UsageReport = Record<string, any>;
+export interface UsageReport {
+  cursor?: ToolData & { model?: string; quota?: CursorQuota; estimated?: boolean; provenance?: string };
+  cursor_quota?: CursorQuota;
+  claude_plan?: any;
+  codex_reset_cards?: any;
+  _errors?: Record<string, string>;
+  _pricing?: { updated_at: string; count: number };
+  [tool: string]: any;
+}
 
 export interface DailyCostRecord {
   date: string;
   total: number;
   tokens: number;
+  tool_costs?: Record<string, number>;
   claude?: number;
   codex?: number;
   gemini?: number;
@@ -75,14 +87,19 @@ export interface TopModelRecord {
 
 export interface CursorQuotaWindow {
   id?: string;
+  name?: string;
   used_pct?: number;
   reset?: number;
+  detail?: string;
+  window_minutes?: number;
   spend?: number;
   limit?: number;
 }
 
 export interface CursorQuotaDetail {
-  name: string;
+  label: string;
+  value: string;
+  name?: string;
   used?: number;
   total?: number;
   unit?: string;

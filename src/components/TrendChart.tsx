@@ -8,6 +8,13 @@ interface TrendChartProps {
   data: DailyCostRecord[];
 }
 
+const KNOWN_COST_TOOL_KEYS = new Set([
+  'claude', 'codex', 'gemini', 'grok', 'grokbuild', 'cursor', 'codebuddy',
+  'opencode', 'hermes', 'openclaw', 'zcode', 'mimocode', 'pi',
+  'workbuddy', 'workbuddy_ai', 'deepseek_harness', 'qwencode',
+  'kimicode', 'prime_agent',
+]);
+
 export const TrendChart: React.FC<TrendChartProps> = ({ data }) => {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
@@ -43,16 +50,22 @@ export const TrendChart: React.FC<TrendChartProps> = ({ data }) => {
             <div className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
               ${activeItem.total?.toFixed(2)}
             </div>
-            {/* Dynamic tool cost breakdown: iterate over all non-zero tool entries in record */}
-            {Object.entries(activeItem)
-              .filter(([k, v]) => !['date', 'total', 'tokens'].includes(k) && typeof v === 'number' && v > 0)
-              .filter(([k, v]) => !(k === 'grok' && activeItem['grokbuild'] === v))
-              .sort(([, a], [, b]) => (b as number) - (a as number))
-              .map(([key, val]) => (
-                <span key={key} className="text-[11px] text-slate-500 dark:text-zinc-400">
-                  {TOOL_DISPLAY_NAMES[key] ?? key}: ${(val as number).toFixed(2)}
-                </span>
-              ))}
+            {/* Dynamic tool cost breakdown: iterate exclusively over tool_costs or known cost tools */}
+            {(() => {
+              const entries = activeItem.tool_costs
+                ? Object.entries(activeItem.tool_costs)
+                : Object.entries(activeItem).filter(([k, v]) => KNOWN_COST_TOOL_KEYS.has(k) && typeof v === 'number' && v > 0);
+
+              return entries
+                .filter(([k, v]) => typeof v === 'number' && v > 0)
+                .filter(([k, v]) => !(k === 'grok' && (activeItem.tool_costs?.['grokbuild'] === v || activeItem['grokbuild'] === v)))
+                .sort(([, a], [, b]) => (b as number) - (a as number))
+                .map(([key, val]) => (
+                  <span key={key} className="text-[11px] text-slate-500 dark:text-zinc-400">
+                    {TOOL_DISPLAY_NAMES[key] ?? key}: ${(val as number).toFixed(2)}
+                  </span>
+                ));
+            })()}
           </div>
         )}
       </div>
