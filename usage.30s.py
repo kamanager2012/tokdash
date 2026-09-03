@@ -303,11 +303,40 @@ def _normalize(model: str):
     return m
 
 
+VALID_PROVENANCES = frozenset({
+    "exact_catalog",
+    "exact_alias",
+    "price_equivalent",
+    "manual_proxy",
+    "family_proxy",
+    "authoritative",
+    "unknown",
+})
+
+_COST_KIND_BY_PROVENANCE = {
+    "exact_catalog": "estimated_exact",
+    "exact_alias": "estimated_exact",
+    "price_equivalent": "estimated_price_equivalent",
+    "manual_proxy": "estimated_manual_proxy",
+    "family_proxy": "estimated_family_proxy",
+    "authoritative": "authoritative_log",
+    "unknown": "unknown",
+}
+
+
 def _alias_target_and_prov(entry):
+    """解析别名条目，强制要求结构化及合法 provenance 声明。
+    非结构化 bare-string 绝不给予 exact_alias 特权，严格 fail-closed 降级为 manual_proxy。
+    """
     if isinstance(entry, dict):
-        return entry.get("target"), entry.get("provenance", "manual_proxy")
+        target = entry.get("target")
+        prov = entry.get("provenance")
+        if prov in VALID_PROVENANCES:
+            return target, prov
+        return target, "manual_proxy"
     if isinstance(entry, str):
-        return entry, "exact_alias"
+        # 兼容兜底：未显式结构化并附带证据的裸别名，一律视为人工代理，禁止默认 exact
+        return entry, "manual_proxy"
     return None, "unknown"
 
 
@@ -9939,9 +9968,7 @@ def _recalc_costs(result):
 
                 m["pricing_provenance"] = prov
                 m["pricing_source"] = price_id or target_model
-                m["cost_kind"] = "estimated_exact" if prov == "exact" else (
-                    "estimated_family_proxy" if prov == "family_proxy" else "unknown"
-                )
+                m["cost_kind"] = _COST_KIND_BY_PROVENANCE.get(prov, "unknown")
 
                 if not price_id or prov == "unknown":
                     total_cost += authoritative_cost
@@ -11030,7 +11057,7 @@ def build_daily_costs(period="all", refresh=True, _cache=None):
                            "cost_per_k": cost_per_k, "out_ratio": out_ratio,
                            "pricing_provenance": v.get("pricing_provenance") or prov,
                            "pricing_source": v.get("pricing_source") or price_id or n,
-                           "cost_kind": v.get("cost_kind") or ("authoritative_log" if v["tool"] == "hermes" else "estimated_api")})
+                           "cost_kind": v.get("cost_kind") or _COST_KIND_BY_PROVENANCE.get(v.get("pricing_provenance") or prov, "unknown")})
 
     def account_model_rows(specs):
         aggregated = {}
@@ -12300,15 +12327,15 @@ def _detect_local_servers(project_paths):
         return {}
 
 
-def _canonical_snapshot_digest(usage_data, daily_data, projects_data):
-    """计算完整的规范化快照状态数据摘要 (Canonical State SHA-256 Digest)。
-    完整覆盖所有工具各时段全部计数 (in, out, cr, cw, reason, cost, sessions)、
-    所有每日历史行与工具拆分、以及项目归属数据。
-    任意维度与字段变动必定导致 digest 改变。
+def _canonical_accounting_digest(usage_data, daily_data, projects_data):
+    """计算核心账务状态规范化数据摘要 (Canonical Accounting-State SHA-256 Digest)。
+    覆盖所有工具各时段全部计量计数 (in, out, cr, cw, reason, cost, sessions)、
+    模型级定价来源与归属 (pricing_provenance, pricing_source)、
+    所有每日历史行与工具细分、以及项目成本与 Token 归属。
     """
     import hashlib
 
-    # 1. 抽取规范化 usage 状态映射
+    # 1. 抽取规范化 usage 状态映射 (含模型级定价来源)
     canonical_tools = {}
     for k in sorted(usage_data.keys()):
         if k.startswith("_"):
@@ -12320,6 +12347,15 @@ def _canonical_snapshot_digest(usage_data, daily_data, projects_data):
         tool_ranges = {}
         for rk in sorted(ranges.keys()):
             r = ranges[rk]
+            models_summary = []
+            for m in sorted((r.get("models") or []), key=lambda x: str(x.get("name") or x.get("model_id") or "")):
+                if isinstance(m, dict):
+                    models_summary.append({
+                        "name": str(m.get("name") or m.get("model_id") or ""),
+                        "cost": round(float(m.get("cost", 0.0) or 0.0), 4),
+                        "pricing_provenance": str(m.get("pricing_provenance") or ""),
+                        "pricing_source": str(m.get("pricing_source") or ""),
+                    })
             tool_ranges[rk] = {
                 "in": r.get("in", 0),
                 "out": r.get("out", 0),
@@ -12328,6 +12364,7 @@ def _canonical_snapshot_digest(usage_data, daily_data, projects_data):
                 "reason": r.get("reason", 0),
                 "cost": round(float(r.get("cost", 0.0) or 0.0), 4),
                 "sessions": len(r.get("sessions") or []) if isinstance(r.get("sessions"), (list, set)) else int(r.get("sessions") or 0),
+                "models": models_summary,
             }
         canonical_tools[k] = tool_ranges
 
@@ -12360,7 +12397,8 @@ def _canonical_snapshot_digest(usage_data, daily_data, projects_data):
     return hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()[:16]
 
 
-_compute_state_digest = _canonical_snapshot_digest
+_canonical_snapshot_digest = _canonical_accounting_digest
+_compute_state_digest = _canonical_accounting_digest
 
 
 def snapshot():

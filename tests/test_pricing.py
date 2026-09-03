@@ -91,5 +91,20 @@ class TestPricingEngine(unittest.TestCase):
         self.assertEqual(prov, "unknown")
         self.assertIsNone(cid)
 
-if __name__ == "__main__":
-    unittest.main()
+    def test_cost_kind_mapping_and_fail_closed_aliases(self):
+        _alias_target_and_prov = getattr(usage_module, "_alias_target_and_prov")
+        _COST_KIND_BY_PROVENANCE = getattr(usage_module, "_COST_KIND_BY_PROVENANCE")
+
+        # 1. Bare string alias must fail-closed to manual_proxy, NEVER exact_alias
+        target, prov = _alias_target_and_prov("unverified-vendor/model-v1")
+        self.assertEqual(prov, "manual_proxy", "Bare string alias must fail closed to manual_proxy")
+
+        # 2. Unknown provenance in structured alias must fail-closed to manual_proxy
+        target, prov = _alias_target_and_prov({"target": "test/model", "provenance": "invalid_bogus_prov"})
+        self.assertEqual(prov, "manual_proxy", "Invalid provenance must fail closed to manual_proxy")
+
+        # 3. Verify all valid provenances map to a valid, non-unknown cost_kind (except unknown itself)
+        for p in ("exact_catalog", "exact_alias", "price_equivalent", "manual_proxy", "family_proxy", "authoritative"):
+            ck = _COST_KIND_BY_PROVENANCE.get(p)
+            self.assertIsNotNone(ck)
+            self.assertNotEqual(ck, "unknown", f"{p} must not map to unknown cost_kind")

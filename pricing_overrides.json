@@ -20,16 +20,46 @@
     }
   },
   "aliases": {
-    "grok-4.6-build": "x-ai/grok-4.6",
-    "grok-4.6": "x-ai/grok-4.6",
-    "kimi-code/k3-256k": "moonshotai/kimi-k3",
-    "k3-256k": "moonshotai/kimi-k3",
-    "hy4-preview": "tencent/hy4-preview",
-    "gemini-3-pro-preview": "google/gemini-3.1-pro-preview",
-    "K3 256k": "moonshotai/kimi-k3",
-    "Hy4 preview": "tencent/hy4-preview",
-    "Hy3": "tencent/hy3",
-    "hy3": "tencent/hy3",
+    "grok-4.6-build": {
+      "target": "x-ai/grok-4.6",
+      "provenance": "exact_alias"
+    },
+    "grok-4.6": {
+      "target": "x-ai/grok-4.6",
+      "provenance": "exact_alias"
+    },
+    "kimi-code/k3-256k": {
+      "target": "moonshotai/kimi-k3",
+      "provenance": "exact_alias"
+    },
+    "k3-256k": {
+      "target": "moonshotai/kimi-k3",
+      "provenance": "exact_alias"
+    },
+    "K3 256k": {
+      "target": "moonshotai/kimi-k3",
+      "provenance": "exact_alias"
+    },
+    "hy4-preview": {
+      "target": "tencent/hy4-preview",
+      "provenance": "exact_alias"
+    },
+    "Hy4 preview": {
+      "target": "tencent/hy4-preview",
+      "provenance": "exact_alias"
+    },
+    "hy3": {
+      "target": "tencent/hy3",
+      "provenance": "exact_alias"
+    },
+    "Hy3": {
+      "target": "tencent/hy3",
+      "provenance": "exact_alias"
+    },
+    "gemini-3-pro-preview": {
+      "target": "google/gemini-3.1-pro-preview",
+      "provenance": "manual_proxy"
+    },
     "Composer 2.5": {
       "target": "openai/gpt-5.5",
       "provenance": "manual_proxy"

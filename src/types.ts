@@ -12,6 +12,15 @@ export interface ProjectRecord {
   ports?: number[];
 }
 
+export type PricingProvenance =
+  | 'exact_catalog'
+  | 'exact_alias'
+  | 'price_equivalent'
+  | 'manual_proxy'
+  | 'family_proxy'
+  | 'authoritative'
+  | 'unknown';
+
 export interface ModelUsage {
   model_id: string;
   name: string;
@@ -23,7 +32,7 @@ export interface ModelUsage {
   cost: number;
   pin?: number;
   pout?: number;
-  pricing_provenance?: 'exact' | 'family_proxy' | 'authoritative' | 'unknown';
+  pricing_provenance?: PricingProvenance;
   pricing_source?: string;
   cost_kind?: string;
 }
@@ -83,7 +92,7 @@ export interface TopModelRecord {
   tool: string;
   cost_per_k: number;
   out_ratio: number;
-  pricing_provenance?: 'exact_catalog' | 'exact_alias' | 'price_equivalent' | 'manual_proxy' | 'family_proxy' | 'authoritative' | 'unknown';
+  pricing_provenance?: PricingProvenance;
   pricing_source?: string;
   cost_kind?: string;
 }

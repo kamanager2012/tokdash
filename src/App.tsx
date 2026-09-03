@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Period, UsageReport, DailyCostRecord, TopModelRecord, ProjectRecord } from './types';
+import { Period, UsageReport, DailyCostRecord, TopModelRecord, ProjectRecord, ModelUsage } from './types';
 import { Header } from './components/Header';
 import { OverviewCards, isToolKey } from './components/OverviewCards';
 import { calculateTotalTokens, getCacheReadTokens } from './utils';
@@ -113,7 +113,7 @@ export const App: React.FC = () => {
       if (!isToolKey(toolKey, toolVal)) return;
       const r = toolVal.ranges?.[period];
       if (!r || !r.models) return;
-      r.models.forEach((m: any) => {
+      r.models.forEach((m: ModelUsage) => {
         const cr = getCacheReadTokens(m);
         const fullIn = (m.in || 0) + cr;
         const out = m.out || 0;

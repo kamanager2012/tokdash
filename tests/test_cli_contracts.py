@@ -112,5 +112,19 @@ class TestCliContracts(unittest.TestCase):
         project_mutated_digest = _canonical_snapshot_digest(data["usage"], data["daily_costs"], mutated_projects)
         self.assertNotEqual(base_digest, project_mutated_digest, "Modifying projects must mutate state digest")
 
+        # Mutating model pricing provenance must change the digest
+        model_prov_usage = copy.deepcopy(data["usage"])
+        mutated_model = False
+        for tool_key in sorted(model_prov_usage.keys()):
+            if not tool_key.startswith("_") and "ranges" in model_prov_usage[tool_key]:
+                models_list = model_prov_usage[tool_key]["ranges"].get("all", {}).get("models", [])
+                if models_list:
+                    models_list[0]["pricing_provenance"] = "mutated_test_prov"
+                    mutated_model = True
+                    break
+        if mutated_model:
+            model_mutated_digest = _canonical_snapshot_digest(model_prov_usage, data["daily_costs"], data["projects"])
+            self.assertNotEqual(base_digest, model_mutated_digest, "Modifying model pricing provenance must mutate state digest")
+
 if __name__ == "__main__":
     unittest.main()
