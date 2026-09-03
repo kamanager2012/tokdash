@@ -1,6 +1,7 @@
 {
   "name": "tokdash",
   "version": "1.0.0",
+  "packageManager": "pnpm@11.21.0",
   "description": "Desktop AI Token & Cost Monitor for Ubuntu/Linux",
   "author": "kamanager2012",
   "license": "MIT",
