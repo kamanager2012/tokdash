@@ -38,7 +38,8 @@
     "test": "python3 -m unittest discover -s tests -v",
     "test:python": "python3 -m unittest discover -s tests -v",
     "start": "electron electron/main.cjs",
-    "app": "vite build && electron electron/main.cjs"
+    "app": "vite build && electron electron/main.cjs",
+    "doctor": "python3 usage.30s.py --doctor"
   },
   "dependencies": {
     "clsx": "^2.1.1",

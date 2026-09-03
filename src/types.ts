@@ -21,6 +21,13 @@ export type PricingProvenance =
   | 'authoritative'
   | 'unknown';
 
+export type MeasurementProvenance =
+  | 'provider_authoritative'
+  | 'log_exact'
+  | 'derived'
+  | 'estimated'
+  | 'unknown';
+
 export interface ModelUsage {
   model_id: string;
   name: string;
@@ -33,6 +40,7 @@ export interface ModelUsage {
   pin?: number;
   pout?: number;
   pricing_provenance?: PricingProvenance;
+  measurement_provenance?: MeasurementProvenance;
   pricing_source?: string;
   cost_kind?: string;
 }
@@ -93,6 +101,7 @@ export interface TopModelRecord {
   cost_per_k: number;
   out_ratio: number;
   pricing_provenance?: PricingProvenance;
+  measurement_provenance?: MeasurementProvenance;
   pricing_source?: string;
   cost_kind?: string;
 }

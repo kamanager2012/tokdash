@@ -137,5 +137,27 @@ class TestCliContracts(unittest.TestCase):
         self.assertNotEqual(digest_original, digest_mutated,
                            "Mutating model pricing_provenance MUST unconditionally mutate accounting state digest")
 
+    def test_cli_doctor_contract(self):
+        """验证 tokdash --doctor 诊断子命令的 ASCII 表格与 JSON 契约。"""
+        # 1. Human-readable ASCII table
+        res_ascii = subprocess.run([sys.executable, SCRIPT_PATH, "--doctor"], capture_output=True, text=True)
+        self.assertEqual(res_ascii.returncode, 0, f"--doctor failed: {res_ascii.stderr}")
+        self.assertIn("TokDash Doctor", res_ascii.stdout)
+        self.assertIn("Claude Code", res_ascii.stdout)
+        self.assertIn("Codex CLI", res_ascii.stdout)
+
+        # 2. Structured JSON diagnostics
+        res_json = subprocess.run([sys.executable, SCRIPT_PATH, "--doctor", "--json"], capture_output=True, text=True)
+        self.assertEqual(res_json.returncode, 0, f"--doctor --json failed: {res_json.stderr}")
+        report = json.loads(res_json.stdout)
+        self.assertIn("system", report)
+        self.assertIn("agents", report)
+        self.assertIsInstance(report["agents"], list)
+        self.assertGreaterEqual(len(report["agents"]), 14, "Doctor must check at least 14 mainstream agents")
+        first_agent = report["agents"][0]
+        for key in ("name", "installed", "readable", "files", "status"):
+            self.assertIn(key, first_agent)
+
+
 if __name__ == "__main__":
     unittest.main()
