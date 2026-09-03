@@ -55,42 +55,23 @@ export const App: React.FC = () => {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const bridge = (window as any).tokdash;
-      if (bridge) {
-        if (typeof bridge.fetchSnapshot === 'function') {
-          // Unified Atomic Snapshot: 1 process, 1 compute(), zero lock contention
-          const snapshot = await bridge.fetchSnapshot();
-          if (snapshot && snapshot.usage) {
-            setUsage(snapshot.usage);
-            if (Array.isArray(snapshot.projects)) setProjects(snapshot.projects);
-            if (snapshot.daily_costs) {
-              if (Array.isArray(snapshot.daily_costs)) {
-                setDailyCosts(snapshot.daily_costs);
-              } else if (snapshot.daily_costs.daily) {
-                setDailyCosts(snapshot.daily_costs.daily);
-                if (snapshot.daily_costs.models) setTopModels(snapshot.daily_costs.models);
-              }
-            }
-            return;
-          }
-        }
+      const bridge = window.tokdash;
+      if (!bridge) {
+        console.warn('TokDash Electron bridge is unavailable.');
+        return;
+      }
 
-        // Fallback for legacy environment
-        const [usageRes, dailyRes, projRes] = await Promise.all([
-          bridge.fetchUsage(),
-          bridge.fetchDailyCosts(),
-          bridge.fetchProjects(),
-        ]);
-        if (usageRes) setUsage(usageRes);
-        if (projRes && Array.isArray(projRes)) setProjects(projRes);
-        if (dailyRes) {
-          if (Array.isArray(dailyRes)) {
-            setDailyCosts(dailyRes);
-          } else if (dailyRes.daily) {
-            setDailyCosts(dailyRes.daily);
-            if (dailyRes.models) setTopModels(dailyRes.models);
-          }
-        }
+      // Unified Atomic Snapshot: one renderer capability, one Python process,
+      // one compute() generation, and no legacy split-read IPC fallback.
+      const snapshot = await bridge.fetchSnapshot();
+      setUsage(snapshot.usage);
+      setProjects(snapshot.projects);
+
+      if (Array.isArray(snapshot.daily_costs)) {
+        setDailyCosts(snapshot.daily_costs);
+      } else {
+        setDailyCosts(snapshot.daily_costs.daily);
+        setTopModels(snapshot.daily_costs.models ?? []);
       }
     } catch (err) {
       console.error('Failed to load tokdash data:', err);
