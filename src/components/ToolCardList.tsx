@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Period, UsageReport } from '../types';
 import { Terminal, Bot, Sparkles, MessageSquare, Code, ChevronDown, ChevronUp, Eye, EyeOff } from 'lucide-react';
-import { ALLOWED_TOOLS } from './OverviewCards';
-import { formatTokens } from '../utils';
+import { isToolKey } from './OverviewCards';
+import { formatTokens, calculateTotalTokens, TOOL_DISPLAY_NAMES } from '../utils';
 
 interface ToolCardListProps {
   usage: UsageReport;
@@ -10,18 +10,24 @@ interface ToolCardListProps {
 }
 
 const TOOL_META: Record<string, { name: string; icon: any; color: string; bg: string }> = {
-  codex:     { name: 'Codex CLI',             icon: Terminal,     color: 'text-emerald-500', bg: 'bg-emerald-500/10 border-emerald-500/20' },
-  claude:    { name: 'Claude Code',           icon: Bot,          color: 'text-amber-500',   bg: 'bg-amber-500/10 border-amber-500/20'   },
-  gemini:    { name: 'Gemini / Antigravity',  icon: Sparkles,     color: 'text-sky-500',     bg: 'bg-sky-500/10 border-sky-500/20'       },
-  cursor:    { name: 'Cursor Composer',       icon: Terminal,     color: 'text-fuchsia-500', bg: 'bg-fuchsia-500/10 border-fuchsia-500/20'},
-  opencode:  { name: 'OpenCode (DeepSeek)',   icon: Code,         color: 'text-violet-500',  bg: 'bg-violet-500/10 border-violet-500/20' },
-  codebuddy: { name: 'CodeBuddy',             icon: Bot,          color: 'text-orange-500',  bg: 'bg-orange-500/10 border-orange-500/20' },
-  kimicode:  { name: 'Kimi Code',             icon: Bot,          color: 'text-cyan-500',    bg: 'bg-cyan-500/10 border-cyan-500/20'     },
-  grok:      { name: 'Grok Build',            icon: MessageSquare,color: 'text-rose-500',    bg: 'bg-rose-500/10 border-rose-500/20'     },
-  grokbuild: { name: 'Grok Build',            icon: MessageSquare,color: 'text-rose-500',    bg: 'bg-rose-500/10 border-rose-500/20'     },
-  pi:        { name: 'Pi Agent CLI',          icon: Code,         color: 'text-indigo-500',  bg: 'bg-indigo-500/10 border-indigo-500/20' },
-  hermes:    { name: 'Hermes Agent',          icon: Terminal,     color: 'text-teal-500',    bg: 'bg-teal-500/10 border-teal-500/20'     },
-  qoder:     { name: 'Qoder IDE',             icon: Sparkles,     color: 'text-blue-500',    bg: 'bg-blue-500/10 border-blue-500/20'     },
+  codex:            { name: 'Codex CLI',             icon: Terminal,     color: 'text-emerald-500', bg: 'bg-emerald-500/10 border-emerald-500/20' },
+  claude:           { name: 'Claude Code',           icon: Bot,          color: 'text-amber-500',   bg: 'bg-amber-500/10 border-amber-500/20'   },
+  gemini:           { name: 'Gemini / Antigravity',  icon: Sparkles,     color: 'text-sky-500',     bg: 'bg-sky-500/10 border-sky-500/20'       },
+  cursor:           { name: 'Cursor Composer',       icon: Terminal,     color: 'text-fuchsia-500', bg: 'bg-fuchsia-500/10 border-fuchsia-500/20'},
+  opencode:         { name: 'OpenCode (DeepSeek)',   icon: Code,         color: 'text-violet-500',  bg: 'bg-violet-500/10 border-violet-500/20' },
+  codebuddy:        { name: 'CodeBuddy',             icon: Bot,          color: 'text-orange-500',  bg: 'bg-orange-500/10 border-orange-500/20' },
+  kimicode:         { name: 'Kimi Code',             icon: Bot,          color: 'text-cyan-500',    bg: 'bg-cyan-500/10 border-cyan-500/20'     },
+  grok:             { name: 'Grok Build',            icon: MessageSquare,color: 'text-rose-500',    bg: 'bg-rose-500/10 border-rose-500/20'     },
+  grokbuild:        { name: 'Grok Build',            icon: MessageSquare,color: 'text-rose-500',    bg: 'bg-rose-500/10 border-rose-500/20'     },
+  grok_bot:         { name: 'Grok Bot',              icon: MessageSquare,color: 'text-rose-500',    bg: 'bg-rose-500/10 border-rose-500/20'     },
+  pi:               { name: 'Pi Agent CLI',          icon: Code,         color: 'text-indigo-500',  bg: 'bg-indigo-500/10 border-indigo-500/20' },
+  hermes:           { name: 'Hermes Agent',          icon: Terminal,     color: 'text-teal-500',    bg: 'bg-teal-500/10 border-teal-500/20'     },
+  qoder:            { name: 'Qoder IDE',             icon: Sparkles,     color: 'text-blue-500',    bg: 'bg-blue-500/10 border-blue-500/20'     },
+  qoderwork:        { name: 'Qoder Work',            icon: Sparkles,     color: 'text-blue-500',    bg: 'bg-blue-500/10 border-blue-500/20'     },
+  qodercli:         { name: 'Qoder CLI',             icon: Terminal,     color: 'text-blue-500',    bg: 'bg-blue-500/10 border-blue-500/20'     },
+  deepseek_harness: { name: 'DeepSeek Harness',      icon: Code,         color: 'text-sky-500',     bg: 'bg-sky-500/10 border-sky-500/20'       },
+  qwencode:         { name: 'Qwen Code',             icon: Bot,          color: 'text-amber-500',   bg: 'bg-amber-500/10 border-amber-500/20'   },
+  workbuddy:        { name: 'WorkBuddy',             icon: Bot,          color: 'text-emerald-500', bg: 'bg-emerald-500/10 border-emerald-500/20' },
 };
 
 export const ToolCardList: React.FC<ToolCardListProps> = ({ usage, period }) => {
@@ -32,17 +38,16 @@ export const ToolCardList: React.FC<ToolCardListProps> = ({ usage, period }) => 
     setExpandedCards((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // 1. 严格只保留本地安装/支持的 8 个真实编程工具，过滤掉所有冗余虚构工具
-  const allTools = ALLOWED_TOOLS.filter((key) => usage[key]?.ranges?.[period]).map((key) => [
-    key,
-    usage[key],
-  ]) as [string, any][];
+  // 1. 动态获取所有后端返回的有效工具，不人为丢弃任何合法 provider
+  const allTools = Object.entries(usage)
+    .filter(([key, val]) => isToolKey(key, val) && val?.ranges?.[period]) as [string, any][];
 
   // 2. 区分当前周期内“有消耗/活跃的工具”与“零用量工具”
   const activeTools = allTools.filter(([key, val]) => {
     const r = val.ranges[period];
     const cacheTokens = (r.cr || 0) + (r.cached || 0);
-    const totalTokens = (r.in || 0) + cacheTokens + (r.out || 0) + (r.reason || 0);
+    const fullPrompt = (r.in || 0) + cacheTokens;
+    const totalTokens = calculateTotalTokens(key, fullPrompt, r.out, r.reason);
     return totalTokens > 0 || (r.cost || 0) > 0 || (r.sessions || 0) > 0;
   });
 
@@ -99,18 +104,19 @@ export const ToolCardList: React.FC<ToolCardListProps> = ({ usage, period }) => 
           };
           const Icon = meta.icon;
 
-          // 核心 Token 逻辑修复：
+          // 核心 Token 逻辑：
           // 1. cacheTokens 为缓存读取 Token (cr 或 cached)
           // 2. fullPrompt 为完整输入的 Prompt 大小 (即 未缓存输入 + 缓存输入)
-          // 3. totalTokens 为该工具产生的所有总吞吐 Token (Prompt输入 + Completion输出)
+          // 3. totalTokens 为该工具产生的所有总吞吐 Token (Prompt输入 + Completion输出，遵循 Codex 思考不重复计数契约)
           const cacheTokens = (r.cr || 0) + (r.cached || 0);
           const fullPrompt = (r.in || 0) + cacheTokens;
-          const totalTokens = fullPrompt + (r.out || 0) + (r.reason || 0);
+          const hasError = Boolean(usage._errors && usage._errors[key]);
+          const totalTokens = calculateTotalTokens(key, fullPrompt, r.out, r.reason);
 
           // 过滤掉无消耗的无效模型 (如 未知: in=0, out=0)
           const validModels = (r.models || []).filter((m: any) => {
             const mCache = (m.cr || 0) + (m.cached || 0);
-            const mTot = (m.in || 0) + mCache + (m.out || 0) + (m.reason || 0);
+            const mTot = calculateTotalTokens(key, (m.in || 0) + mCache, m.out, m.reason);
             return mTot > 0 || (m.cost || 0) > 0;
           });
 
@@ -120,7 +126,11 @@ export const ToolCardList: React.FC<ToolCardListProps> = ({ usage, period }) => 
           return (
             <div
               key={key}
-              className="bg-white dark:bg-[#181820] border border-slate-200 dark:border-zinc-800/80 rounded-xl p-4 hover:border-slate-300 dark:hover:border-zinc-700 transition-all hover:shadow-md flex flex-col justify-between"
+              className={`bg-white dark:bg-[#181820] border ${
+                hasError
+                  ? 'border-amber-500/50 dark:border-amber-500/40'
+                  : 'border-slate-200 dark:border-zinc-800/80'
+              } rounded-xl p-4 hover:border-slate-300 dark:hover:border-zinc-700 transition-all hover:shadow-md flex flex-col justify-between`}
             >
               <div>
                 {/* Header */}
@@ -130,7 +140,14 @@ export const ToolCardList: React.FC<ToolCardListProps> = ({ usage, period }) => 
                       <Icon className={`w-4 h-4 ${meta.color}`} />
                     </div>
                     <div>
-                      <h4 className="text-sm font-medium text-slate-800 dark:text-zinc-100">{meta.name}</h4>
+                      <div className="flex items-center gap-1.5">
+                        <h4 className="text-sm font-medium text-slate-800 dark:text-zinc-100">{meta.name}</h4>
+                        {hasError && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 font-medium">
+                            采集异常
+                          </span>
+                        )}
+                      </div>
                       <div className="text-[11px] text-slate-500 dark:text-zinc-400 flex items-center gap-1">
                         <span>{r.sessions || 0} 场独立会话</span>
                         {r.turns ? <span>· {r.turns} 次交互</span> : null}

@@ -1,14 +1,15 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Period, UsageReport, DailyCostRecord, TopModelRecord, ProjectRecord } from './types';
 import { Header } from './components/Header';
-import { OverviewCards, ALLOWED_TOOLS } from './components/OverviewCards';
+import { OverviewCards, isToolKey } from './components/OverviewCards';
+import { calculateTotalTokens } from './utils';
 import { QuotaCards } from './components/QuotaCards';
 import { TrendChart } from './components/TrendChart';
 import { ToolCardList } from './components/ToolCardList';
 import { ModelBreakdown } from './components/ModelBreakdown';
 import { ProjectsTable } from './components/ProjectsTable';
 import { SettingsModal } from './components/SettingsModal';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle, X } from 'lucide-react';
 
 export const App: React.FC = () => {
   const [period, setPeriod] = useState<Period>('today');
@@ -18,6 +19,7 @@ export const App: React.FC = () => {
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [dismissErrors, setDismissErrors] = useState(false);
 
   // Theme support: dark / light
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
@@ -74,20 +76,20 @@ export const App: React.FC = () => {
     return () => clearInterval(timer);
   }, [loadData]);
 
-  // Dynamically compute model usage matching the CURRENT period
+  // Dynamically compute model usage matching the CURRENT period across all scanned tools
   const currentPeriodModels = useMemo(() => {
     const map: Record<string, TopModelRecord> = {};
     Object.entries(usage).forEach(([toolKey, toolVal]) => {
-      if (!ALLOWED_TOOLS.includes(toolKey)) return;
-      if (toolKey.startsWith('_') || !toolVal?.ranges) return;
-      const r = toolVal.ranges[period];
+      if (!isToolKey(toolKey, toolVal)) return;
+      const r = toolVal.ranges?.[period];
       if (!r || !r.models) return;
       r.models.forEach((m: any) => {
         const cr = (m.cr || 0) + (m.cached || 0);
         const fullIn = (m.in || 0) + cr;
         const out = m.out || 0;
         const reason = m.reason || 0;
-        const tokens = fullIn + out + reason;
+        // Accurate token accounting avoiding Codex double-counting
+        const tokens = calculateTotalTokens(toolKey, fullIn, out, reason);
         const cost = m.cost || 0;
         if (tokens === 0 && cost === 0) return;
 
@@ -146,6 +148,25 @@ export const App: React.FC = () => {
           </div>
         ) : (
           <div className="max-w-6xl mx-auto space-y-6">
+            {/* Parser Failures & Telemetry Errors Notification */}
+            {usage._errors && Object.keys(usage._errors).length > 0 && !dismissErrors && (
+              <div className="bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 px-4 py-2.5 rounded-xl text-xs flex items-center justify-between shadow-sm">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-4 h-4 flex-shrink-0 text-amber-500" />
+                  <span>
+                    部分工具采集异常（已降级为不可用，非零用量）：
+                    <strong> {Object.keys(usage._errors).join(', ')}</strong>
+                  </span>
+                </div>
+                <button
+                  onClick={() => setDismissErrors(true)}
+                  className="hover:opacity-75 p-1 text-slate-500 dark:text-zinc-400"
+                  title="关闭提示"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
             <QuotaCards usage={usage} />
             <OverviewCards usage={usage} period={period} />
             <TrendChart data={dailyCosts} />

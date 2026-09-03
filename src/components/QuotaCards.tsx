@@ -140,9 +140,9 @@ export const QuotaCards: React.FC<QuotaCardsProps> = ({ usage }) => {
                   </span>
                 </div>
               </div>
-              {grok.pct !== null && (
+              {grok.pct !== null && grok.pct !== undefined && (
                 <span className="text-[11px] font-mono font-semibold text-rose-600 dark:text-rose-400">
-                  剩余 {grok.pct}%
+                  已用 {Number(grok.pct).toFixed(0)}% <span className="text-[10px] text-slate-500 dark:text-zinc-400 font-normal">(余 {Math.max(0, 100 - Number(grok.pct)).toFixed(0)}%)</span>
                 </span>
               )}
             </div>
@@ -152,7 +152,7 @@ export const QuotaCards: React.FC<QuotaCardsProps> = ({ usage }) => {
                 <div className="w-full bg-slate-100 dark:bg-zinc-900 h-1.5 rounded-full overflow-hidden">
                   <div
                     className="bg-rose-500 h-full rounded-full transition-all duration-300"
-                    style={{ width: `${grok.pct || 0}%` }}
+                    style={{ width: `${Math.min(100, Math.max(0, Number(grok.pct) || 0))}%` }}
                   />
                 </div>
               </div>

@@ -100,5 +100,33 @@ class TestTokenAccounting(unittest.TestCase):
         })
         self.assertIsNone(self._claude_usage(user_line))
 
+    def test_safe_scan_propagates_exceptions_into_errors_dict(self):
+        _safe_scan = getattr(usage_module, "_safe_scan")
+        errors = {}
+        def failing_parser():
+            raise ValueError("Corrupted session JSONL format")
+        
+        result = _safe_scan("test_tool", failing_parser, lambda: {"ranges": {}}, errors)
+        self.assertEqual(result, {"ranges": {}})
+        self.assertIn("test_tool", errors, "Errors dict must record parser exceptions")
+        self.assertIn("Corrupted session JSONL format", errors["test_tool"])
+
+    def test_grok_billing_normalization_represents_usage_percentage(self):
+        _normalize_grok_billing = getattr(usage_module, "_normalize_grok_billing")
+        sample_config = {
+            "creditUsagePercent": 75.5,
+            "currentPeriod": {"start": "2026-09-01T00:00:00Z", "end": "2026-10-01T00:00:00Z"},
+            "isUnifiedBillingUser": True
+        }
+        res = _normalize_grok_billing(sample_config)
+        self.assertIsNotNone(res)
+        # pct is usage percent (75.5%), so remaining is 24.5%
+        self.assertEqual(res["pct"], 75.5, "Normalized pct must reflect creditUsagePercent")
+
+    def test_cursor_quota_disabled_by_default(self):
+        _provider_quota_enabled = getattr(usage_module, "_provider_quota_enabled")
+        # Unless user opts in via config, cursor quota live polling must be False
+        self.assertFalse(_provider_quota_enabled("cursor"))
+
 if __name__ == "__main__":
     unittest.main()

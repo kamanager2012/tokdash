@@ -12,12 +12,13 @@ interface HeaderProps {
   onToggleTheme: () => void;
 }
 
+const currentMonth = new Date().getMonth() + 1;
 const PERIOD_LABELS: Partial<Record<Period, string>> = {
   today: '今日',
   yesterday: '昨日',
   '7d': '近 7 天',
   '30d': '近 30 天',
-  month: '本月 (9月)',
+  month: `本月 (${currentMonth}月)`,
   all: '全部',
 };
 
@@ -44,7 +45,7 @@ export const Header: React.FC<HeaderProps> = ({
         <div>
           <div className="flex items-center gap-2">
             <span className="font-semibold text-sm tracking-wide text-slate-800 dark:text-zinc-100">
-              Tokei 知度
+              TokDash
             </span>
             <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
               Linux

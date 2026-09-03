@@ -304,7 +304,7 @@ def _normalize(model: str):
 
 
 def _resolve_id(model: str):
-    """解析到 canonical id;未知按 opus 兜底(偏保守)。<synthetic> 返回 None。"""
+    """解析到 canonical id; 未知模型返回 None(由调用方标记 0/未知)，严禁假冒 Opus。"""
     s = (model or "").strip()
     if not s or s.lower() == "<synthetic>":
         return None
@@ -319,7 +319,7 @@ def _resolve_id(model: str):
     for kw, rep in _FAMILY:
         if kw in low:
             return rep
-    return "anthropic/claude-opus-4.8"
+    return None
 
 
 def _known_id_or_raw(model: str):
@@ -9748,7 +9748,6 @@ def compute():
             "ranges": granges,
         },
         "antigravity": provider_quotas["antigravity"],
-        "cursor": provider_quotas["cursor"],
         "zed": provider_quotas["zed"],
         "sub2api": provider_quotas["sub2api"],
         "zai": provider_quotas["zai"],
@@ -9823,12 +9822,12 @@ def compute():
         "cursor": {
             "ranges": cursor_ranges,
             "model": cursor_res.get("model", "Composer 2.5"),
+            "quota": provider_quotas.get("cursor") or {},
         },
     }
-    c_quota = fetch_cursor_official_quota()
-    if c_quota:
-        result["cursor_quota"] = c_quota
-        result["cursor"]["quota"] = c_quota
+    cq = provider_quotas.get("cursor")
+    if cq and isinstance(cq, dict) and cq.get("available"):
+        result["cursor_quota"] = cq
     if errors:
         result["_errors"] = errors
     _recalc_costs(result)
@@ -9836,41 +9835,8 @@ def compute():
 
 
 def fetch_cursor_official_quota():
-    auth_file = os.path.join(HOME, ".config", "cursor", "auth.json")
-    if not os.path.isfile(auth_file):
-        return None
-    try:
-        with open(auth_file, "r") as f:
-            auth = json.load(f)
-        token = auth.get("accessToken")
-        if not token:
-            return None
-        import urllib.request
-        url = "https://api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage"
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "Connect-Protocol-Version": "1",
-            "User-Agent": "Cursor-Agent"
-        }
-        req = urllib.request.Request(url, data=b"{}", headers=headers, method="POST")
-        with urllib.request.urlopen(req, timeout=3) as res:
-            data = json.loads(res.read().decode("utf-8"))
-            pu = data.get("planUsage", {})
-            return {
-                "available": True,
-                "plan": "Ultra",
-                "start": int(data.get("billingCycleStart", 0)) // 1000,
-                "end": int(data.get("billingCycleEnd", 0)) // 1000,
-                "total_spend": round(pu.get("totalSpend", 0) / 100.0, 2),
-                "included_spend": round(pu.get("includedSpend", 0) / 100.0, 2),
-                "bonus_spend": round(pu.get("bonusSpend", 0) / 100.0, 2),
-                "percent_used": round(pu.get("totalPercentUsed", 0.0), 1),
-                "auto_percent_used": round(pu.get("autoPercentUsed", 0.0), 1),
-                "account": auth.get("email") or auth.get("userEmail") or data.get("userEmail") or "Cursor User"
-            }
-    except Exception:
-        return None
+    """Legacy alias: redirected to TTL-cached fetch_cursor_quota to prevent high-frequency API spam."""
+    return fetch_cursor_quota() if _provider_quota_enabled("cursor") else None
 
 
 def _recalc_costs(result):

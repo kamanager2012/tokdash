@@ -87,7 +87,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <span>纯本地架构与防双重计费</span>
             </div>
             <p className="text-slate-500 dark:text-zinc-400 leading-relaxed text-[11px]">
-              Tokei 绝不依赖任何私有代理或中间层，纯粹只读取系统本地存储目录（如 ~/.codex/、~/.claude/、~/.cursor/、~/.codebuddy/），数据真实可溯源。
+              TokDash 绝不依赖任何私有代理或中间层，纯粹只读取系统本地存储目录（如 ~/.codex/、~/.claude/、~/.cursor/、~/.codebuddy/），数据真实可溯源。
             </p>
           </div>
 

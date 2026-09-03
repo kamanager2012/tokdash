@@ -49,14 +49,26 @@ DESKTOP_EOF
 chmod +x "$APP_DIR/tokdash.desktop"
 update-desktop-database "$APP_DIR" 2>/dev/null || true
 
-# 6. 配置开机自启
+# 6. 配置开机自启（可选，支持 --autostart 参数）
+ENABLE_AUTOSTART=false
+for arg in "$@"; do
+    if [ "$arg" == "--autostart" ]; then
+        ENABLE_AUTOSTART=true
+    fi
+done
+
 AUTOSTART_DIR="$HOME/.config/autostart"
-mkdir -p "$AUTOSTART_DIR"
-cp "$APP_DIR/tokdash.desktop" "$AUTOSTART_DIR/tokdash.desktop"
+if [ "$ENABLE_AUTOSTART" = true ]; then
+    mkdir -p "$AUTOSTART_DIR"
+    cp "$APP_DIR/tokdash.desktop" "$AUTOSTART_DIR/tokdash.desktop"
+    AUTOSTART_STATUS="已启用 (~/.config/autostart/tokdash.desktop)"
+else
+    AUTOSTART_STATUS="未启用 (如需开启，请带参数运行: ./install.sh --autostart)"
+fi
 
 echo "=================================================="
 echo "✅ TokDash 安装成功！"
 echo "  - 启动方式 1: 在 Ubuntu 应用中心搜索 'TokDash' 点击运行"
 echo "  - 启动方式 2: 终端直接运行 $DIR/start.sh"
-echo "  - 开机自启: 已自动启用 (~/.config/autostart/tokdash.desktop)"
+echo "  - 开机自启: $AUTOSTART_STATUS"
 echo "=================================================="

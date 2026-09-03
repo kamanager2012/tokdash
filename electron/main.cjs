@@ -73,12 +73,28 @@ function createWindow() {
     }
   });
 
+  const isDev = process.env.TOKDASH_DEV === '1' || process.env.NODE_ENV === 'development';
   const distIndex = path.join(ROOT_DIR, 'dist', 'index.html');
+
   if (fs.existsSync(distIndex)) {
     mainWindow.loadFile(distIndex);
-  } else {
+  } else if (isDev) {
     mainWindow.loadURL('http://localhost:5173');
+  } else {
+    console.error('Fatal: Production build missing (dist/index.html not found). Run "pnpm build" first.');
+    app.quit();
+    return;
   }
+
+  // Security: deny all in-app navigation outside local bundled files
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith('file://') && !(isDev && url.startsWith('http://localhost:5173'))) {
+      event.preventDefault();
+    }
+  });
+
+  // Security: deny auxiliary windows/popups
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();

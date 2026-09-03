@@ -46,5 +46,16 @@ class TestPricingEngine(unittest.TestCase):
         overrides_path = os.path.join(ROOT_DIR, "pricing_overrides.json")
         self.assertTrue(os.path.isfile(overrides_path), "pricing_overrides.json must exist")
 
+    def test_unknown_models_do_not_fallback_to_opus(self):
+        _resolve_id = getattr(usage_module, "_resolve_id")
+        price_for = getattr(usage_module, "price_for")
+        unknown_id = _resolve_id("completely-unknown-custom-fine-tuned-model-xyz")
+        self.assertIsNone(unknown_id, "Unknown models must resolve to None, not Claude Opus")
+        
+        price = price_for("completely-unknown-custom-fine-tuned-model-xyz")
+        self.assertEqual(price["in"], 0.0)
+        self.assertEqual(price["out"], 0.0)
+        self.assertEqual(price["cache_read"], 0.0)
+
 if __name__ == "__main__":
     unittest.main()
