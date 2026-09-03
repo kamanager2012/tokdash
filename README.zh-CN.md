@@ -45,16 +45,22 @@ TokDash 以只读方式被动解析各工具标准的本机会话日志，不作
 
 | Agent / 工具 | 检测位置 | 追踪指标 |
 | :--- | :--- | :--- |
+| **Claude Code** | `~/.claude/projects/` JSONL 日志 | 输入、输出、Cache Read/Write、会话轮次与费用 |
 | **Codex CLI** | `~/.codex/` 会话 | Token、Reasoning、Cache Read、费用 |
-| **Claude Code** | `~/.claude/projects/` JSONL 日志 | 输入、输出、Cache Read/Write、轮次 |
-| **Antigravity / Gemini CLI** | 本地进程与会话存储 | Google AI Pro 5 小时窗口与套餐额度 |
-| **Grok Build** | `~/.tokei/` / `~/.cc-switch/` | API Token、实时额度与会话 |
-| **Kimi Code** | `~/.kimi-code/` 协议日志 | Agent 轮次 Token、模型与费用 |
-| **OpenCode** | `~/.opencode/` | DeepSeek / 本地 LLM Token 遥测 |
-| **Cursor Composer** | `~/.config/Cursor/` 授权数据 | 月度套餐消耗、按量费用、已用百分比 |
+| **Grok Build** | `~/.tokei/` / `~/.cc-switch/` | API Token、实时额度、重置窗口与费用 |
+| **Grok Bot** | `~/.grok-bot/` / 本地日志 | 机器人交互轮次、Token 吞吐 |
+| **Cursor Composer** | `~/.config/Cursor/` 授权数据 | 月度套餐消耗、按量费用、已用百分比与重置倒计时 |
+| **Antigravity / Gemini CLI** | 本地进程与会话存储 | Google AI Pro 5 小时额度窗口与逐步 Token |
+| **Kimi Code** | `~/.kimi-code/` 协议日志 | Agent 轮次 Token、模型路由与费用 |
+| **DeepSeek Harness** | `~/.dsh/` community 会话 | JSONL 会话指标、模型路由与费用 |
+| **OpenCode** | `~/.opencode/` 本地存储与 SQLite | DeepSeek / 本地 LLM Token 遥测与费用 |
+| **Hermes Agent** | `~/.hermes/` 运行目录 | 本地账本权威记录、会话数与 Token 吞吐 |
 | **Pi Coding Agent** | `~/.pi/` Agent 运行记录 | 工具调用、输入/输出 Token |
-| **Hermes Agent** | `~/.hermes/` 运行目录 | 会话数、Token 吞吐 |
-| **DeepSeek Harness** | `~/.dsh/` community 会话 | JSONL 会话指标与模型路由 |
+| **GLM Code (智谱)** | `~/.zcode/` CLI SQLite 数据库 | 智谱 GLM-5 系列 Token 吞吐与会话明细 |
+| **CodeBuddy / WorkBuddy** | `~/.codebuddy/` / `~/.workbuddy/` | 腾讯代码助手会话轮次与 Token 消耗 |
+| **Qoder** | `~/.qoder/` 工作区与 SQLite | Qoder IDE / Work / CLI 多端交互与 Token 计量 |
+
+> **设计说明**：TokDash 重点聚焦以上 14 类生产级主流 AI 编程 Agent，保证核心采集链路的高可靠性与严格平账；精简边缘小众工具。
 
 ---
 

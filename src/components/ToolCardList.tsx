@@ -10,25 +10,32 @@ interface ToolCardListProps {
 }
 
 const TOOL_META: Record<string, { name: string; icon: any; color: string; bg: string }> = {
-  codex:            { name: 'Codex CLI',             icon: Terminal,     color: 'text-emerald-500', bg: 'bg-emerald-500/10 border-emerald-500/20' },
   claude:           { name: 'Claude Code',           icon: Bot,          color: 'text-amber-500',   bg: 'bg-amber-500/10 border-amber-500/20'   },
-  gemini:           { name: 'Gemini / Antigravity',  icon: Sparkles,     color: 'text-sky-500',     bg: 'bg-sky-500/10 border-sky-500/20'       },
-  cursor:           { name: 'Cursor Composer',       icon: Terminal,     color: 'text-fuchsia-500', bg: 'bg-fuchsia-500/10 border-fuchsia-500/20'},
-  opencode:         { name: 'OpenCode (DeepSeek)',   icon: Code,         color: 'text-violet-500',  bg: 'bg-violet-500/10 border-violet-500/20' },
-  codebuddy:        { name: 'CodeBuddy',             icon: Bot,          color: 'text-orange-500',  bg: 'bg-orange-500/10 border-orange-500/20' },
-  kimicode:         { name: 'Kimi Code',             icon: Bot,          color: 'text-cyan-500',    bg: 'bg-cyan-500/10 border-cyan-500/20'     },
+  codex:            { name: 'Codex CLI',             icon: Terminal,     color: 'text-emerald-500', bg: 'bg-emerald-500/10 border-emerald-500/20' },
   grok:             { name: 'Grok Build',            icon: MessageSquare,color: 'text-rose-500',    bg: 'bg-rose-500/10 border-rose-500/20'     },
   grokbuild:        { name: 'Grok Build',            icon: MessageSquare,color: 'text-rose-500',    bg: 'bg-rose-500/10 border-rose-500/20'     },
   grok_bot:         { name: 'Grok Bot',              icon: MessageSquare,color: 'text-rose-500',    bg: 'bg-rose-500/10 border-rose-500/20'     },
-  pi:               { name: 'Pi Agent CLI',          icon: Code,         color: 'text-indigo-500',  bg: 'bg-indigo-500/10 border-indigo-500/20' },
+  cursor:           { name: 'Cursor Composer',       icon: Terminal,     color: 'text-fuchsia-500', bg: 'bg-fuchsia-500/10 border-fuchsia-500/20'},
+  gemini:           { name: 'Antigravity / Gemini',  icon: Sparkles,     color: 'text-sky-500',     bg: 'bg-sky-500/10 border-sky-500/20'       },
+  kimicode:         { name: 'Kimi Code',             icon: Bot,          color: 'text-cyan-500',    bg: 'bg-cyan-500/10 border-cyan-500/20'     },
+  deepseek_harness: { name: 'DeepSeek Harness',      icon: Code,         color: 'text-sky-500',     bg: 'bg-sky-500/10 border-sky-500/20'       },
+  opencode:         { name: 'OpenCode',              icon: Code,         color: 'text-violet-500',  bg: 'bg-violet-500/10 border-violet-500/20' },
   hermes:           { name: 'Hermes Agent',          icon: Terminal,     color: 'text-teal-500',    bg: 'bg-teal-500/10 border-teal-500/20'     },
+  pi:               { name: 'Pi Agent CLI',          icon: Code,         color: 'text-indigo-500',  bg: 'bg-indigo-500/10 border-indigo-500/20' },
+  zcode:            { name: 'GLM Code (智谱)',       icon: Code,         color: 'text-blue-500',    bg: 'bg-blue-500/10 border-blue-500/20'     },
+  codebuddy:        { name: 'CodeBuddy',             icon: Bot,          color: 'text-orange-500',  bg: 'bg-orange-500/10 border-orange-500/20' },
+  workbuddy:        { name: 'WorkBuddy',             icon: Bot,          color: 'text-emerald-500', bg: 'bg-emerald-500/10 border-emerald-500/20' },
   qoder:            { name: 'Qoder IDE',             icon: Sparkles,     color: 'text-blue-500',    bg: 'bg-blue-500/10 border-blue-500/20'     },
   qoderwork:        { name: 'Qoder Work',            icon: Sparkles,     color: 'text-blue-500',    bg: 'bg-blue-500/10 border-blue-500/20'     },
   qodercli:         { name: 'Qoder CLI',             icon: Terminal,     color: 'text-blue-500',    bg: 'bg-blue-500/10 border-blue-500/20'     },
-  deepseek_harness: { name: 'DeepSeek Harness',      icon: Code,         color: 'text-sky-500',     bg: 'bg-sky-500/10 border-sky-500/20'       },
   qwencode:         { name: 'Qwen Code',             icon: Bot,          color: 'text-amber-500',   bg: 'bg-amber-500/10 border-amber-500/20'   },
-  workbuddy:        { name: 'WorkBuddy',             icon: Bot,          color: 'text-emerald-500', bg: 'bg-emerald-500/10 border-emerald-500/20' },
 };
+
+export const MAINSTREAM_TOOLS = new Set([
+  'claude', 'codex', 'grok', 'grok_bot', 'cursor', 'gemini', 'kimicode',
+  'deepseek_harness', 'opencode', 'hermes', 'pi', 'zcode', 'codebuddy',
+  'workbuddy', 'qoder', 'qoderwork', 'qodercli'
+]);
 
 export const ToolCardList: React.FC<ToolCardListProps> = ({ usage, period }) => {
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>({});

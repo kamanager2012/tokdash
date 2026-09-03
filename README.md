@@ -45,16 +45,22 @@ TokDash passively inspects standard local session logs in read-only mode and doe
 
 | Agent / Tool | Detection Target | Metrics Tracked |
 | :--- | :--- | :--- |
-| **Codex CLI** | `~/.codex/` sessions | Tokens, Reasoning, Cache Reads, Cost |
-| **Claude Code** | `~/.claude/projects/` JSONL logs | Input, Output, Cache Read/Write, Turns |
-| **Antigravity / Gemini CLI** | Local process & session store | Google AI Pro 5h rate limits & quotas |
-| **Grok Build** | `~/.tokei/` / `~/.cc-switch/` | Real API tokens, live quotas & sessions |
-| **Kimi Code** | `~/.kimi-code/` protocol logs | Agent turn tokens, models & cost |
-| **OpenCode** | `~/.opencode/` | DeepSeek / local LLM token telemetry |
-| **Cursor Composer** | `~/.config/Cursor/` auth | Monthly plan spend, auto-spend, % used |
+| **Claude Code** | `~/.claude/projects/` JSONL logs | Input, Output, Cache Read/Write, Turns & Estimated Cost |
+| **Codex CLI** | `~/.codex/` sessions | Tokens, Reasoning, Cache Reads, Estimated Cost |
+| **Grok Build** | `~/.tokei/` / `~/.cc-switch/` | Real API tokens, live quotas, windows & cost |
+| **Grok Bot** | `~/.grok-bot/` / local logs | Bot interaction turns & token throughput |
+| **Cursor Composer** | `~/.config/Cursor/` auth | Monthly plan spend, auto-spend, % used & reset countdown |
+| **Antigravity / Gemini CLI** | Local process & session store | Google AI Pro 5h rate limits, quotas & per-step tokens |
+| **Kimi Code** | `~/.kimi-code/` protocol logs | Agent turn tokens, model routing & cost |
+| **DeepSeek Harness** | `~/.dsh/` community sessions | JSONL session metrics, model routing & cost |
+| **OpenCode** | `~/.opencode/` storage & SQLite | DeepSeek / local LLM token telemetry & cost |
+| **Hermes Agent** | `~/.hermes/` runtime | Authoritative local ledger, sessions, token throughput |
 | **Pi Coding Agent** | `~/.pi/` agent runs | Tool calls, input/output token counts |
-| **Hermes Agent** | `~/.hermes/` runtime | Sessions, token throughput |
-| **DeepSeek Harness** | `~/.dsh/` community sessions | JSONL session metrics & model routes |
+| **GLM Code** | `~/.zcode/` CLI SQLite database | Zhipu GLM-5 series tokens & session metrics |
+| **CodeBuddy / WorkBuddy** | `~/.codebuddy/` / `~/.workbuddy/` | Tencent coding assistant turns & token counts |
+| **Qoder** | `~/.qoder/` workspace & SQLite | Qoder IDE / Work / CLI multi-target tokens & metrics |
+
+> **Design Note**: TokDash explicitly focuses on these 14 first-class production AI coding agents, ensuring rock-solid ingestion pipelines and strict mathematical reconciliation. Peripheral niche tools are de-emphasized.
 
 ---
 
