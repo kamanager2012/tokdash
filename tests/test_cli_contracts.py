@@ -112,19 +112,30 @@ class TestCliContracts(unittest.TestCase):
         project_mutated_digest = _canonical_snapshot_digest(data["usage"], data["daily_costs"], mutated_projects)
         self.assertNotEqual(base_digest, project_mutated_digest, "Modifying projects must mutate state digest")
 
-        # Mutating model pricing provenance must change the digest
-        model_prov_usage = copy.deepcopy(data["usage"])
-        mutated_model = False
-        for tool_key in sorted(model_prov_usage.keys()):
-            if not tool_key.startswith("_") and "ranges" in model_prov_usage[tool_key]:
-                models_list = model_prov_usage[tool_key]["ranges"].get("all", {}).get("models", [])
-                if models_list:
-                    models_list[0]["pricing_provenance"] = "mutated_test_prov"
-                    mutated_model = True
-                    break
-        if mutated_model:
-            model_mutated_digest = _canonical_snapshot_digest(model_prov_usage, data["daily_costs"], data["projects"])
-            self.assertNotEqual(base_digest, model_mutated_digest, "Modifying model pricing provenance must mutate state digest")
+        # 4. Unconditional Deterministic Hard-Gate: Mutating model pricing provenance
+        synthetic_usage = {
+            "claude": {
+                "ranges": {
+                    "all": {
+                        "in": 1000, "out": 200, "cr": 0, "cw": 0, "reason": 0, "cost": 0.05, "sessions": 1,
+                        "models": [
+                            {"name": "claude-sonnet-4.6", "cost": 0.05, "pricing_provenance": "exact_catalog", "pricing_source": "anthropic/claude-sonnet-4.6"}
+                        ]
+                    }
+                }
+            }
+        }
+        synthetic_daily = {"daily": [{"date": "2026-09-03", "total": 0.05, "tokens": 1200, "tool_costs": {"claude": 0.05}}]}
+        synthetic_projects = [{"path": "/workspace/demo", "cost": 0.05, "tokens": 1200}]
+
+        digest_original = _canonical_snapshot_digest(synthetic_usage, synthetic_daily, synthetic_projects)
+
+        mutated_model_usage = copy.deepcopy(synthetic_usage)
+        mutated_model_usage["claude"]["ranges"]["all"]["models"][0]["pricing_provenance"] = "manual_proxy"
+        digest_mutated = _canonical_snapshot_digest(mutated_model_usage, synthetic_daily, synthetic_projects)
+
+        self.assertNotEqual(digest_original, digest_mutated,
+                           "Mutating model pricing_provenance MUST unconditionally mutate accounting state digest")
 
 if __name__ == "__main__":
     unittest.main()
