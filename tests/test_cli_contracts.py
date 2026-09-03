@@ -57,11 +57,16 @@ class TestCliContracts(unittest.TestCase):
         data = json.loads(res.stdout)
         self.assertIsInstance(data, dict, "--snapshot must return a JSON dictionary")
         self.assertIn("snapshot_id", data)
+        self.assertIn("generation", data)
         self.assertIn("generated_at", data)
         self.assertIn("usage", data)
         self.assertIn("daily_costs", data)
         self.assertIn("projects", data)
         
+        # Verify generation token is a non-empty string
+        self.assertIsInstance(data["generation"], str)
+        self.assertGreater(len(data["generation"]), 0)
+
         # Verify usage contains pricing metadata
         self.assertIn("_pricing", data["usage"])
         # Verify projects is a list

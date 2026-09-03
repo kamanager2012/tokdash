@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Period, UsageReport, DailyCostRecord, TopModelRecord, ProjectRecord } from './types';
 import { Header } from './components/Header';
 import { OverviewCards, isToolKey } from './components/OverviewCards';
-import { calculateTotalTokens } from './utils';
+import { calculateTotalTokens, getCacheReadTokens } from './utils';
 import { QuotaCards } from './components/QuotaCards';
 import { TrendChart } from './components/TrendChart';
 import { ToolCardList } from './components/ToolCardList';
@@ -19,7 +19,17 @@ export const App: React.FC = () => {
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [dismissErrors, setDismissErrors] = useState(false);
+  const [dismissedErrorFingerprint, setDismissedErrorFingerprint] = useState<string | null>(null);
+
+  // Compute current error fingerprint so new errors reopen warning banner
+  const currentErrorFingerprint = useMemo(() => {
+    if (!usage._errors || Object.keys(usage._errors).length === 0) return '';
+    return Object.keys(usage._errors).sort().join(',');
+  }, [usage._errors]);
+
+  const shouldShowErrors = Boolean(
+    currentErrorFingerprint && currentErrorFingerprint !== dismissedErrorFingerprint
+  );
 
   // Theme support: dark / light
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
@@ -104,7 +114,7 @@ export const App: React.FC = () => {
       const r = toolVal.ranges?.[period];
       if (!r || !r.models) return;
       r.models.forEach((m: any) => {
-        const cr = (m.cr || 0) + (m.cached || 0);
+        const cr = getCacheReadTokens(m);
         const fullIn = (m.in || 0) + cr;
         const out = m.out || 0;
         const reason = m.reason || 0;
@@ -169,7 +179,7 @@ export const App: React.FC = () => {
         ) : (
           <div className="max-w-6xl mx-auto space-y-6">
             {/* Parser Failures & Telemetry Errors Notification */}
-            {usage._errors && Object.keys(usage._errors).length > 0 && !dismissErrors && (
+            {shouldShowErrors && (
               <div className="bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 px-4 py-2.5 rounded-xl text-xs flex items-center justify-between shadow-sm">
                 <div className="flex items-center gap-2">
                   <AlertTriangle className="w-4 h-4 flex-shrink-0 text-amber-500" />
@@ -179,7 +189,7 @@ export const App: React.FC = () => {
                   </span>
                 </div>
                 <button
-                  onClick={() => setDismissErrors(true)}
+                  onClick={() => setDismissedErrorFingerprint(currentErrorFingerprint)}
                   className="hover:opacity-75 p-1 text-slate-500 dark:text-zinc-400"
                   title="关闭提示"
                 >

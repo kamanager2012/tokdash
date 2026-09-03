@@ -303,23 +303,61 @@ def _normalize(model: str):
     return m
 
 
-def _resolve_id(model: str):
-    """解析到 canonical id; 未知模型返回 None(由调用方标记 0/未知)，严禁假冒 Opus。"""
+def resolve_pricing_entry(model: str):
+    """返回 (canonical_id, provenance)。provenance ∈ {'exact', 'family_proxy', 'unknown'}。"""
     s = (model or "").strip()
     if not s or s.lower() == "<synthetic>":
-        return None
+        return None, "unknown"
     if s in _OV_ALIASES:
-        return _OV_ALIASES[s]
+        return _OV_ALIASES[s], "exact"
     norm = _normalize(model)
     if norm and (norm in _OV_MODELS or norm in _PRICING_DB or norm in _DEFAULT_PRICES):
-        return norm
+        return norm, "exact"
     low = s.lower()
-    if "gemini" in low:                               # gemini 版本繁多,按 pro/flash 粗分回退
-        return "google/gemini-3.1-pro-preview" if "pro" in low else "google/gemini-3.5-flash"
+    if "gemini" in low:
+        target = "google/gemini-3.1-pro-preview" if "pro" in low else "google/gemini-3.5-flash"
+        return target, "family_proxy"
     for kw, rep in _FAMILY:
         if kw in low:
-            return rep
-    return None
+            return rep, "family_proxy"
+    return None, "unknown"
+
+
+def _resolve_id(model: str):
+    """解析到 canonical id; 未知模型返回 None(由调用方标记 0/未知)，严禁假冒 Opus。"""
+    cid, _ = resolve_pricing_entry(model)
+    return cid
+
+
+def _raw_price(model: str):
+    """统一查价 → {in,out,cache_read,cache_write,write1h?,provenance}。<synthetic>→全 0。"""
+    cid, prov = resolve_pricing_entry(model)
+    if cid is None:
+        return {"in": 0.0, "out": 0.0, "cache_read": 0.0, "cache_write": 0.0, "provenance": "unknown"}
+    p = dict(_DEFAULT_PRICES.get(cid, {}))            # 内置兜底打底
+    p.update(_PRICING_DB.get(cid, {}))                # OpenRouter 基准
+    p.update(_OV_MODELS.get(cid, {}))                 # 本地覆盖优先
+    out = {"in": p.get("in", 0.0), "out": p.get("out", 0.0),
+           "cache_read": p.get("cache_read", 0.0), "cache_write": p.get("cache_write", 0.0),
+           "provenance": prov}
+    if "write1h" in p:
+        out["write1h"] = p["write1h"]
+    elif cid.startswith("anthropic/"):                # Anthropic 1h 写 = 2×输入价
+        out["write1h"] = out["in"] * 2
+    return out
+
+
+def price_for(model: str):
+    """Claude 成本用:补 write5m/write1h 两档(write5m = OpenRouter cache_write)。"""
+    p = _raw_price(model)
+    return {"in": p["in"], "out": p["out"], "cache_read": p["cache_read"],
+            "write5m": p["cache_write"], "write1h": p.get("write1h", p["cache_write"]),
+            "provenance": p["provenance"]}
+
+
+def gemini_price(model: str):
+    """Gemini 成本用:in/out/cache_read 取统一查价(OpenRouter 已分版本,比正则更准)。"""
+    return _raw_price(model)
 
 
 def _known_id_or_raw(model: str):
@@ -383,33 +421,6 @@ def _pricing_id(model: str):
     return None
 
 
-def _raw_price(model: str):
-    """统一查价 → {in,out,cache_read,cache_write,write1h?}。<synthetic>→全 0。"""
-    cid = _resolve_id(model)
-    if cid is None:
-        return {"in": 0.0, "out": 0.0, "cache_read": 0.0, "cache_write": 0.0}
-    p = dict(_DEFAULT_PRICES.get(cid, {}))            # 内置兜底打底
-    p.update(_PRICING_DB.get(cid, {}))                # OpenRouter 基准
-    p.update(_OV_MODELS.get(cid, {}))                 # 本地覆盖优先
-    out = {"in": p.get("in", 0.0), "out": p.get("out", 0.0),
-           "cache_read": p.get("cache_read", 0.0), "cache_write": p.get("cache_write", 0.0)}
-    if "write1h" in p:
-        out["write1h"] = p["write1h"]
-    elif cid.startswith("anthropic/"):                # Anthropic 1h 写 = 2×输入价
-        out["write1h"] = out["in"] * 2
-    return out
-
-
-def price_for(model: str):
-    """Claude 成本用:补 write5m/write1h 两档(write5m = OpenRouter cache_write)。"""
-    p = _raw_price(model)
-    return {"in": p["in"], "out": p["out"], "cache_read": p["cache_read"],
-            "write5m": p["cache_write"], "write1h": p.get("write1h", p["cache_write"])}
-
-
-def gemini_price(model: str):
-    """Gemini 成本用:in/out/cache_read 取统一查价(OpenRouter 已分版本,比正则更准)。"""
-    return _raw_price(model)
 
 
 RANGE_KEYS = ["today", "yesterday", "week", "last_week", "7d", "30d", "month", "year", "all"]
@@ -536,8 +547,13 @@ import tempfile as _tempfile
 import time as _time
 _LEGACY_SCAN_CACHE_FILE = os.path.join(
     _tempfile.gettempdir(), "_tokei_scan_cache.json")
-_SCAN_CACHE_DIR = os.environ.get("TOKEI_CACHE_DIR") or os.path.join(
-    HOME, ".tokei", "cache")
+_PREV_TOKEI_CACHE_FILE = os.path.join(
+    HOME, ".tokei", "cache", "scan_cache.json")
+_SCAN_CACHE_DIR = (
+    os.environ.get("TOKDASH_CACHE_DIR")
+    or os.environ.get("TOKEI_CACHE_DIR")
+    or os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.join(HOME, ".config")), "tokdash")
+)
 _DEFAULT_SCAN_CACHE_FILE = os.path.join(
     _SCAN_CACHE_DIR, "scan_cache.json")
 _SCAN_CACHE_FILE = _DEFAULT_SCAN_CACHE_FILE
@@ -560,8 +576,15 @@ def _remove_codex_event_cache_dir():
 
 def _migrate_legacy_scan_cache():
     if (_SCAN_CACHE_FILE != _DEFAULT_SCAN_CACHE_FILE
-            or os.path.exists(_SCAN_CACHE_FILE)
-            or not os.path.isfile(_LEGACY_SCAN_CACHE_FILE)):
+            or os.path.exists(_SCAN_CACHE_FILE)):
+        return
+
+    source_file = None
+    if os.path.isfile(_PREV_TOKEI_CACHE_FILE):
+        source_file = _PREV_TOKEI_CACHE_FILE
+    elif os.path.isfile(_LEGACY_SCAN_CACHE_FILE):
+        source_file = _LEGACY_SCAN_CACHE_FILE
+    else:
         return
 
     import shutil
@@ -575,9 +598,9 @@ def _migrate_legacy_scan_cache():
     fd, tmp = _tempfile.mkstemp(prefix=".scan-cache-", suffix=".json", dir=directory)
     try:
         os.close(fd)
-        shutil.copyfile(_LEGACY_SCAN_CACHE_FILE, tmp)
+        shutil.copyfile(source_file, tmp)
         os.chmod(tmp, 0o600)
-        legacy_events = f"{_LEGACY_SCAN_CACHE_FILE}{_CODEX_EVENT_CACHE_SUFFIX}"
+        legacy_events = f"{source_file}{_CODEX_EVENT_CACHE_SUFFIX}"
         current_events = _codex_event_cache_dir()
         if os.path.isdir(legacy_events) and not os.path.exists(current_events):
             shutil.copytree(legacy_events, current_events)
@@ -4899,6 +4922,12 @@ def _normalize_cursor_quota(summary, *, request_usage=None, sand_usage=None, use
         "source": "cursor-api",
         "updated": int(updated if updated is not None else datetime.now().timestamp()),
         "stale": False,
+        # Backward-compatibility aliases for legacy frontend clients
+        "percent_used": total_pct,
+        "end": cycle_end,
+        "total_spend": round(plan_used / 100.0, 2),
+        "included_spend": round(plan_limit / 100.0, 2),
+        "bonus_spend": 0.0,
     }
 
 
@@ -5252,7 +5281,12 @@ def scan_cursor(bounds, cache):
                 _add_token_usage(bucket, day_data.get("in", 0), day_data.get("out", 0),
                                  cr=day_data.get("cr", 0),
                                  cost=day_data.get("cost", 0.0), model="Composer 2.5")
-    return {"ranges": B, "model": "Composer 2.5"}
+    return {
+        "ranges": B,
+        "model": "Composer 2.5",
+        "estimated": True,
+        "provenance": "heuristic_char_div_4",
+    }
 
 
 def _grok_bot_usage_only_fallback():
@@ -9512,7 +9546,7 @@ def scan_claude_plan():
 
 
 @_with_scan_cache_lock
-def compute():
+def compute(return_cache=False):
     bounds = range_bounds()
     cache = _load_scan_cache()
     errors = {}
@@ -9823,6 +9857,8 @@ def compute():
             "ranges": cursor_ranges,
             "model": cursor_res.get("model", "Composer 2.5"),
             "quota": provider_quotas.get("cursor") or {},
+            "estimated": True,
+            "provenance": "heuristic_char_div_4",
         },
     }
     cq = provider_quotas.get("cursor")
@@ -9831,6 +9867,8 @@ def compute():
     if errors:
         result["_errors"] = errors
     _recalc_costs(result)
+    if return_cache:
+        return result, cache
     return result
 
 
@@ -12206,21 +12244,25 @@ def _detect_local_servers(project_paths):
 
 
 def snapshot():
-    """原子一致性快照: 仅执行单次 compute(), 在同一次扫描周期内生成 usage, daily_costs 和 projects。"""
-    import uuid
+    """原子一致性快照: 仅执行单次 compute(), 在单一内存世代内派生 usage, daily_costs 和 projects。"""
+    import uuid, hashlib
     snap_id = str(uuid.uuid4())
     gen_time = datetime.now().astimezone().isoformat()
 
-    usage_data = compute()
+    # 1. 核心计算并获取当前内存世代引用，完全避开磁盘读取窗口
+    usage_data, latest_cache = compute(return_cache=True)
     meta = _load_json(PRICING_FILE, {}).get("_meta", {})
     usage_data["_pricing"] = {"updated_at": meta.get("updated_at", ""), "count": meta.get("count", 0)}
 
-    latest_cache = _load_scan_cache()
+    # 2. 同一内存 generation 派生
     daily_data = build_daily_costs(_arg_period(), refresh=False, _cache=latest_cache)
     projects_data = get_projects(refresh=False, _cache=latest_cache)
 
+    gen_token = hashlib.sha256(f"{snap_id}:{len(latest_cache)}".encode("utf-8")).hexdigest()[:16]
+
     payload = {
         "snapshot_id": snap_id,
+        "generation": gen_token,
         "generated_at": gen_time,
         "usage": usage_data,
         "daily_costs": daily_data,

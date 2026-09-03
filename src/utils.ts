@@ -18,6 +18,18 @@ export function formatCost(usd: number): string {
 }
 
 /**
+ * Extract cache read tokens safely without double counting legacy aliases.
+ * Backend range/model objects may provide both `cr` and `cached` as aliases.
+ * They represent the EXACT SAME metric and MUST NOT be added together!
+ */
+export function getCacheReadTokens(obj: any): number {
+  if (!obj || typeof obj !== 'object') return 0;
+  if (typeof obj.cr === 'number') return obj.cr;
+  if (typeof obj.cached === 'number') return obj.cached;
+  return 0;
+}
+
+/**
  * Calculate total tokens for a tool or model turn.
  * 
  * ACCOUNTING CONTRACT:

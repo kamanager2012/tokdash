@@ -56,6 +56,25 @@ class TestPricingEngine(unittest.TestCase):
         self.assertEqual(price["in"], 0.0)
         self.assertEqual(price["out"], 0.0)
         self.assertEqual(price["cache_read"], 0.0)
+        self.assertEqual(price["provenance"], "unknown")
+
+    def test_pricing_provenance_classification(self):
+        resolve_pricing_entry = getattr(usage_module, "resolve_pricing_entry")
+        
+        # 1. Exact catalog match (via explicit override alias)
+        cid, prov = resolve_pricing_entry("claude-3-5-sonnet-20241022")
+        self.assertEqual(prov, "exact")
+        self.assertEqual(cid, "anthropic/claude-sonnet-4.6")
+
+        # 2. Family proxy match
+        cid, prov = resolve_pricing_entry("claude-sonnet-experimental-v9")
+        self.assertEqual(prov, "family_proxy")
+        self.assertIn("sonnet", cid)
+
+        # 3. Completely unknown
+        cid, prov = resolve_pricing_entry("completely-unrecognized-vendor-model-999")
+        self.assertEqual(prov, "unknown")
+        self.assertIsNone(cid)
 
 if __name__ == "__main__":
     unittest.main()

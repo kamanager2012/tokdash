@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Period, UsageReport } from '../types';
 import { Terminal, Bot, Sparkles, MessageSquare, Code, ChevronDown, ChevronUp, Eye, EyeOff } from 'lucide-react';
 import { isToolKey } from './OverviewCards';
-import { formatTokens, calculateTotalTokens, TOOL_DISPLAY_NAMES } from '../utils';
+import { formatTokens, calculateTotalTokens, getCacheReadTokens, TOOL_DISPLAY_NAMES } from '../utils';
 
 interface ToolCardListProps {
   usage: UsageReport;
@@ -45,7 +45,7 @@ export const ToolCardList: React.FC<ToolCardListProps> = ({ usage, period }) => 
   // 2. 区分当前周期内“有消耗/活跃的工具”与“零用量工具”
   const activeTools = allTools.filter(([key, val]) => {
     const r = val.ranges[period];
-    const cacheTokens = (r.cr || 0) + (r.cached || 0);
+    const cacheTokens = getCacheReadTokens(r);
     const fullPrompt = (r.in || 0) + cacheTokens;
     const totalTokens = calculateTotalTokens(key, fullPrompt, r.out, r.reason);
     return totalTokens > 0 || (r.cost || 0) > 0 || (r.sessions || 0) > 0;
@@ -105,23 +105,25 @@ export const ToolCardList: React.FC<ToolCardListProps> = ({ usage, period }) => 
           const Icon = meta.icon;
 
           // 核心 Token 逻辑：
-          // 1. cacheTokens 为缓存读取 Token (cr 或 cached)
-          // 2. fullPrompt 为完整输入的 Prompt 大小 (即 未缓存输入 + 缓存输入)
+          // 1. cacheTokens 为缓存读取 Token (通过 getCacheReadTokens 安全提取，严禁双算别名)
+          // 2. fullPrompt 为完整输入的 Prompt 大小 (即 未缓存输入 + 缓存读取输入)
           // 3. totalTokens 为该工具产生的所有总吞吐 Token (Prompt输入 + Completion输出，遵循 Codex 思考不重复计数契约)
-          const cacheTokens = (r.cr || 0) + (r.cached || 0);
+          const cacheTokens = getCacheReadTokens(r);
           const fullPrompt = (r.in || 0) + cacheTokens;
           const hasError = Boolean(usage._errors && usage._errors[key]);
           const totalTokens = calculateTotalTokens(key, fullPrompt, r.out, r.reason);
 
           // 过滤掉无消耗的无效模型 (如 未知: in=0, out=0)
           const validModels = (r.models || []).filter((m: any) => {
-            const mCache = (m.cr || 0) + (m.cached || 0);
+            const mCache = getCacheReadTokens(m);
             const mTot = calculateTotalTokens(key, (m.in || 0) + mCache, m.out, m.reason);
             return mTot > 0 || (m.cost || 0) > 0;
           });
 
           const isExpanded = expandedCards[key];
           const visibleModels = isExpanded ? validModels : validModels.slice(0, 3);
+
+          const isEstimated = Boolean(val?.estimated);
 
           return (
             <div
@@ -140,8 +142,16 @@ export const ToolCardList: React.FC<ToolCardListProps> = ({ usage, period }) => 
                       <Icon className={`w-4 h-4 ${meta.color}`} />
                     </div>
                     <div>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <h4 className="text-sm font-medium text-slate-800 dark:text-zinc-100">{meta.name}</h4>
+                        {isEstimated && (
+                          <span
+                            className="text-[10px] px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20 font-medium"
+                            title="基于本地转录字符数启发式估算 (chars/4)，非官方精确 Token 账单"
+                          >
+                            推算预估
+                          </span>
+                        )}
                         {hasError && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 font-medium">
                             采集异常
@@ -158,7 +168,7 @@ export const ToolCardList: React.FC<ToolCardListProps> = ({ usage, period }) => 
 
                   <div className="text-right">
                     <div className="text-base font-bold text-slate-900 dark:text-white font-mono">
-                      ${(r.cost || 0).toFixed(2)}
+                      {isEstimated ? '~' : ''}${(r.cost || 0).toFixed(2)}
                     </div>
                     <div className="text-[11px] text-slate-500 dark:text-zinc-400">
                       缓存率 {(r.hit || 0).toFixed(1)}%
@@ -170,7 +180,9 @@ export const ToolCardList: React.FC<ToolCardListProps> = ({ usage, period }) => 
                 <div className="bg-slate-50 dark:bg-[#121216] rounded-lg p-2.5 grid grid-cols-4 gap-1.5 text-center text-xs mb-3 border border-slate-200/80 dark:border-zinc-800/40">
                   <div className="border-r border-slate-200 dark:border-zinc-800/60 pr-1">
                     <span className="text-[10px] text-slate-500 dark:text-zinc-400 block font-medium">总吞吐量</span>
-                    <span className="font-mono text-slate-900 dark:text-white font-bold text-xs">{formatTokens(totalTokens)}</span>
+                    <span className="font-mono text-slate-900 dark:text-white font-bold text-xs">
+                      {isEstimated ? '~' : ''}{formatTokens(totalTokens)}
+                    </span>
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-500 dark:text-zinc-400 block">Prompt 输入</span>
@@ -195,9 +207,9 @@ export const ToolCardList: React.FC<ToolCardListProps> = ({ usage, period }) => 
                     </div>
                     <div className="space-y-1">
                       {visibleModels.map((m: any, idx: number) => {
-                        const mCache = (m.cr || 0) + (m.cached || 0);
+                        const mCache = getCacheReadTokens(m);
                         const mPrompt = (m.in || 0) + mCache;
-                        const mTotal = mPrompt + (m.out || 0) + (m.reason || 0);
+                        const mTotal = calculateTotalTokens(key, mPrompt, m.out, m.reason);
 
                         return (
                           <div

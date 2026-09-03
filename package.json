@@ -33,6 +33,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "lint": "tsc --noEmit",
     "typecheck": "tsc --noEmit",
     "test": "python3 -m unittest discover -s tests -v",
     "test:python": "python3 -m unittest discover -s tests -v",

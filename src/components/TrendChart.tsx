@@ -3,12 +3,6 @@ import { DailyCostRecord } from '../types';
 import { TrendingUp, Calendar } from 'lucide-react';
 import { TOOL_DISPLAY_NAMES } from '../utils';
 
-// Tool keys to show in the tooltip, in display order.
-// Both 'grok' and 'grokbuild' are included: the backend may use either key.
-const TOOLTIP_TOOL_KEYS = [
-  'claude', 'codex', 'gemini', 'grokbuild', 'grok',
-  'opencode', 'kimicode', 'codebuddy', 'cursor', 'hermes', 'pi',
-];
 
 interface TrendChartProps {
   data: DailyCostRecord[];
@@ -49,17 +43,16 @@ export const TrendChart: React.FC<TrendChartProps> = ({ data }) => {
             <div className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
               ${activeItem.total?.toFixed(2)}
             </div>
-            {TOOLTIP_TOOL_KEYS.map((key) => {
-              const val = activeItem[key];
-              if (!val || val <= 0) return null;
-              // Deduplicate: skip 'grok' if 'grokbuild' already rendered the same value
-              if (key === 'grok' && activeItem['grokbuild'] === val) return null;
-              return (
+            {/* Dynamic tool cost breakdown: iterate over all non-zero tool entries in record */}
+            {Object.entries(activeItem)
+              .filter(([k, v]) => !['date', 'total', 'tokens'].includes(k) && typeof v === 'number' && v > 0)
+              .filter(([k, v]) => !(k === 'grok' && activeItem['grokbuild'] === v))
+              .sort(([, a], [, b]) => (b as number) - (a as number))
+              .map(([key, val]) => (
                 <span key={key} className="text-[11px] text-slate-500 dark:text-zinc-400">
-                  {TOOL_DISPLAY_NAMES[key] ?? key}: ${val.toFixed(2)}
+                  {TOOL_DISPLAY_NAMES[key] ?? key}: ${(val as number).toFixed(2)}
                 </span>
-              );
-            })}
+              ))}
           </div>
         )}
       </div>

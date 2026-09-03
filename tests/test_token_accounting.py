@@ -128,5 +128,20 @@ class TestTokenAccounting(unittest.TestCase):
         # Unless user opts in via config, cursor quota live polling must be False
         self.assertFalse(_provider_quota_enabled("cursor"))
 
+    def test_qoder_cached_and_cr_aliases_accounting_contract(self):
+        token_total = getattr(usage_module, "token_total")
+        # Simulated Qoder day record where cached and cr are identical aliases
+        record = {
+            "in": 1_000_000,
+            "out": 1_000_000,
+            "cr": 8_000_000,
+            "cached": 8_000_000,
+            "cw": 0,
+            "reason": 0
+        }
+        total = token_total(record)
+        # 1M in + 1M out + 8M cr = 10M (MUST NOT be 18M)
+        self.assertEqual(total, 10_000_000, "token_total must not double-count cached legacy alias on top of cr")
+
 if __name__ == "__main__":
     unittest.main()

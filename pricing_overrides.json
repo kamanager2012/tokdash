@@ -31,6 +31,8 @@
     "Hy3": "tencent/hy3",
     "hy3": "tencent/hy3",
     "Composer 2.5": "openai/gpt-5.5",
-    "composer-2.5": "openai/gpt-5.5"
+    "composer-2.5": "openai/gpt-5.5",
+    "claude-3-5-sonnet-20241022": "anthropic/claude-sonnet-4.6",
+    "claude-3-5-sonnet": "anthropic/claude-sonnet-4.6"
   }
 }

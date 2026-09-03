@@ -166,50 +166,72 @@ export const QuotaCards: React.FC<QuotaCardsProps> = ({ usage }) => {
           </div>
         )}
 
-        {/* Cursor Ultra Official Quota Card */}
-        {cursor && cursor.available && (
-          <div className="bg-white dark:bg-[#181822] border border-fuchsia-400/40 dark:border-fuchsia-500/20 rounded-xl p-4 shadow-sm transition-colors">
-            <div className="flex items-center justify-between mb-2.5">
-              <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-fuchsia-500/10 text-fuchsia-500">
-                  <Terminal className="w-4 h-4" />
-                </div>
-                <div>
-                  <span className="text-xs font-semibold text-slate-800 dark:text-zinc-100 block">
-                    Cursor
-                  </span>
-                  <span className="text-[10px] text-fuchsia-600 dark:text-fuchsia-400 font-medium">
-                    Cursor {cursor.plan || 'Ultra'}
-                  </span>
-                </div>
-              </div>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400 font-mono font-medium">
-                已用 {cursor.percent_used}%
-              </span>
-            </div>
+        {/* Cursor Official Quota Card */}
+        {cursor && cursor.available && (() => {
+          const totalWindow = cursor.windows?.find((w: any) => w.id === 'cursor-total') || cursor.windows?.[0];
+          const usedPct = totalWindow?.used_pct ?? cursor.percent_used ?? 0;
+          const resetTime = totalWindow?.reset ?? cursor.end;
+          
+          // Plan display: avoid "Cursor Cursor Ultra" duplication
+          const rawPlan = cursor.plan || 'Ultra';
+          const displayPlan = rawPlan.toLowerCase().startsWith('cursor ') ? rawPlan : `Cursor ${rawPlan}`;
 
-            <div className="space-y-2 mt-3 pt-2 border-t border-slate-100 dark:border-zinc-800/60">
-              <div className="space-y-1">
-                <div className="flex justify-between text-xs">
-                  <span className="text-slate-500 dark:text-zinc-400">本月累计消费</span>
-                  <span className="text-slate-700 dark:text-zinc-200 font-mono font-semibold">
-                    ${cursor.total_spend}
-                  </span>
+          // Detailed metrics resolution
+          const packageDetail = cursor.details?.find((d: any) => d.label === '套餐用量')?.value;
+          const budgetDetail = cursor.details?.find((d: any) => d.label === '按量预算')?.value;
+          const spendText = packageDetail || (cursor.total_spend !== undefined ? `$${cursor.total_spend}` : null);
+          const subText = budgetDetail ? `按量: ${budgetDetail}` : (
+            cursor.included_spend !== undefined
+              ? `包含 $${cursor.included_spend} + 赠送 $${cursor.bonus_spend ?? 0}`
+              : '订阅额度'
+          );
+
+          return (
+            <div className="bg-white dark:bg-[#181822] border border-fuchsia-400/40 dark:border-fuchsia-500/20 rounded-xl p-4 shadow-sm transition-colors">
+              <div className="flex items-center justify-between mb-2.5">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 rounded-lg bg-fuchsia-500/10 text-fuchsia-500">
+                    <Terminal className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-semibold text-slate-800 dark:text-zinc-100 block">
+                      Cursor
+                    </span>
+                    <span className="text-[10px] text-fuchsia-600 dark:text-fuchsia-400 font-medium">
+                      {displayPlan}
+                    </span>
+                  </div>
                 </div>
-                <div className="w-full bg-slate-100 dark:bg-zinc-900 h-1.5 rounded-full overflow-hidden">
-                  <div
-                    className="bg-fuchsia-500 h-full rounded-full transition-all duration-300"
-                    style={{ width: `${Math.min(100, Math.max(5, cursor.percent_used || 5))}%` }}
-                  />
-                </div>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-fuchsia-500/10 text-fuchsia-600 dark:text-fuchsia-400 font-mono font-medium">
+                  已用 {Number(usedPct).toFixed(1)}%
+                </span>
               </div>
-              <div className="flex justify-between text-[11px] text-slate-500 dark:text-zinc-400 font-mono pt-0.5">
-                <span>包含 ${cursor.included_spend} + 赠送 ${cursor.bonus_spend}</span>
-                <span>{formatCountdown(cursor.end)}</span>
+
+              <div className="space-y-2 mt-3 pt-2 border-t border-slate-100 dark:border-zinc-800/60">
+                <div className="space-y-1">
+                  {spendText && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-500 dark:text-zinc-400">当前周期用量</span>
+                      <span className="text-slate-700 dark:text-zinc-200 font-mono font-semibold">
+                        {spendText}
+                      </span>
+                    </div>
+                  )}
+                  <div className="w-full bg-slate-100 dark:bg-zinc-900 h-1.5 rounded-full overflow-hidden">
+                    <div
+                      className="bg-fuchsia-500 h-full rounded-full transition-all duration-300"
+                      style={{ width: `${Math.min(100, Math.max(2, Number(usedPct) || 0))}%` }}
+                    />
+                  </div>
+                </div>
+                <div className="flex justify-between text-[11px] text-slate-500 dark:text-zinc-400 font-mono pt-0.5">
+                  <span>{subText}</span>
+                  {resetTime ? <span>{formatCountdown(resetTime)}</span> : <span>周期内有效</span>}
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
       </div>
     </div>
   );

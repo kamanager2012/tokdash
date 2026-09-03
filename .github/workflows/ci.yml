@@ -29,10 +29,10 @@ jobs:
           python-version: '3.11'
 
       - name: Install Dependencies
-        run: pnpm install --frozen-lockfile=false
+        run: pnpm install --frozen-lockfile
 
-      - name: TypeScript Typecheck
-        run: pnpm typecheck
+      - name: Code Lint & Typecheck
+        run: pnpm run lint
 
       - name: Frontend Build
         run: pnpm build

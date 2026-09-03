@@ -29,7 +29,7 @@ Inspired by [cclank/tokei](https://github.com/cclank/tokei) (macOS menu bar app)
 
 ## ✨ Features
 
-- 🔒 **100% Local & Zero-Cloud Privacy**: Reads only local session transcripts and SQLite/JSONL cache files on your disk. No prompts, code, or tokens are ever sent to remote analytics servers.
+- 🔒 **Local-First & Transparent Privacy**: Reads local session transcripts and SQLite/JSONL cache files on your disk for passive accounting. No prompts, code, or context logs are ever uploaded to third-party telemetry servers. Official quota limits (if configured) interact solely with your authorized provider endpoints.
 - ⚡ **Full Token Metrics Breakdown**: Distinguishes **Prompt Input**, **Completion Output**, and **Cache Reads** (saving you from double-counting cached tokens).
 - 💰 **Configurable Cost Estimation**: Estimated using OpenRouter's 300+ model pricing catalog (`pricing.json`) combined with customizable local rate overrides (`pricing_overrides.json`) to accommodate private endpoints and discounts.
 - 📈 **Two-Week Daily Expense Trend**: Interactive daily bar chart with granular tool breakdown on hover.

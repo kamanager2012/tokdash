@@ -73,6 +73,38 @@ export interface TopModelRecord {
   out_ratio: number;
 }
 
+export interface CursorQuotaWindow {
+  id?: string;
+  used_pct?: number;
+  reset?: number;
+  spend?: number;
+  limit?: number;
+}
+
+export interface CursorQuotaDetail {
+  name: string;
+  used?: number;
+  total?: number;
+  unit?: string;
+}
+
+export interface CursorQuota {
+  available?: boolean;
+  plan?: string;
+  account?: string;
+  windows?: CursorQuotaWindow[];
+  details?: CursorQuotaDetail[];
+  source?: string;
+  updated?: number;
+  stale?: boolean;
+  // Legacy fallback fields
+  percent_used?: number;
+  total_spend?: number;
+  included_spend?: number;
+  bonus_spend?: number;
+  end?: number;
+}
+
 export interface DailyCostsResponse {
   daily: DailyCostRecord[];
   models: TopModelRecord[];

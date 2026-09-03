@@ -35,7 +35,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
       <div className="bg-white dark:bg-[#181822] border border-slate-200 dark:border-zinc-800 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150 transition-colors">
         <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-zinc-800">
           <h3 className="font-semibold text-sm text-slate-800 dark:text-zinc-100 flex items-center gap-2">
-            <span>Tokei 知度 - 设置与元数据</span>
+            <span>TokDash - 设置与元数据</span>
           </h3>
           <button
             onClick={onClose}
@@ -84,10 +84,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           <div className="space-y-2">
             <div className="flex items-center gap-1.5 text-slate-700 dark:text-zinc-200 font-medium">
               <Shield className="w-4 h-4 text-emerald-500" />
-              <span>纯本地架构与防双重计费</span>
+              <span>本地优先架构与防双重计费</span>
             </div>
             <p className="text-slate-500 dark:text-zinc-400 leading-relaxed text-[11px]">
-              TokDash 绝不依赖任何私有代理或中间层，纯粹只读取系统本地存储目录（如 ~/.codex/、~/.claude/、~/.cursor/、~/.codebuddy/），数据真实可溯源。
+              TokDash 采用本地优先架构，默认被动解析本地工具存储目录（如 ~/.codex/、~/.claude/、~/.cursor/、~/.codebuddy/），绝不上报代码或提示词。官方配额查询仅在具备本地凭据时直连对应官方接口。
             </p>
           </div>
 

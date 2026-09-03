@@ -1,7 +1,7 @@
 import React from 'react';
 import { Period, UsageReport } from '../types';
 import { DollarSign, Cpu, Zap, Layers } from 'lucide-react';
-import { formatTokens, calculateTotalTokens } from '../utils';
+import { formatTokens, calculateTotalTokens, getCacheReadTokens } from '../utils';
 
 interface OverviewCardsProps {
   usage: UsageReport;
@@ -36,7 +36,7 @@ export const OverviewCards: React.FC<OverviewCardsProps> = ({ usage, period }) =
     const r = val.ranges?.[period];
     if (!r) return;
 
-    const crVal = (r.cr || 0) + (r.cached || 0);
+    const crVal = getCacheReadTokens(r);
     const inVal = r.in || 0;
     const outVal = r.out || 0;
     const reasonVal = r.reason || 0;
