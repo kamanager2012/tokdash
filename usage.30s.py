@@ -2435,7 +2435,12 @@ def _iter_codex_usage_records(path, chunk_size=64 * 1024, header_limit=1024,
                 start = newline + 1
 
     if candidate is not None:
-        yield "token", bytes(candidate)
+        raw_cand = bytes(candidate)
+        try:
+            json.loads(raw_cand.decode("utf-8", errors="ignore"))
+            yield "token", raw_cand
+        except Exception:
+            pass
 
 
 def _codex_complete_offset(path, size, chunk_size=64 * 1024):
@@ -8359,7 +8364,7 @@ def _opencode_json_dirs():
     data_dirs = _path_candidates(
         "TOKEI_OPENCODE_DATA_DIR", OPENCODE_DATA_DIR, *OPENCODE_DATA_DIRS)
     defaults = [OPENCODE_DIR] + [os.path.join(root, "storage", "message") for root in data_dirs]
-    return _existing_dirs(_path_candidates("TOKEI_OPENCODE_DIR", *defaults))
+    return _existing_dirs(_path_candidates("TOKDASH_OPENCODE_DIR", "TOKEI_OPENCODE_DIR", *defaults))
 
 
 def _opencode_message_day(message, session_id="", created_ms=0, estimate_missing_cost=False):
@@ -8497,6 +8502,7 @@ def scan_opencode(bounds, cache):
                     st = os.stat(f)
                 except OSError:
                     continue
+                stale.discard(f)
                 sig = f"{st.st_mtime}:{st.st_size}"
                 entry = fc.get(f)
                 if (entry and entry.get("sig") == sig
@@ -8523,7 +8529,6 @@ def scan_opencode(bounds, cache):
                 if message_id in seen_message_ids:
                     continue
                 seen_message_ids.add(message_id)
-                stale.discard(f)
 
                 if not day_data:
                     continue
