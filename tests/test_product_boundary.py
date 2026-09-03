@@ -1,5 +1,4 @@
 import pathlib
-import re
 import unittest
 
 
@@ -19,10 +18,7 @@ class ProductBoundaryTests(unittest.TestCase):
             "scan_sub2api_quota",
         )
         for name in forbidden:
-            self.assertIsNone(
-                re.search(rf"^def\\s+{re.escape(name)}\\(", source, flags=re.MULTILINE),
-                name,
-            )
+            self.assertNotIn(f"def {name}(", source, name)
 
     def test_pruned_frontend_keys_do_not_reenter_fallback_lists(self):
         trend = (ROOT / "src/components/TrendChart.tsx").read_text(encoding="utf-8")
@@ -36,8 +32,16 @@ class ProductBoundaryTests(unittest.TestCase):
         source = (ROOT / "usage.30s.py").read_text(encoding="utf-8")
         cards = (ROOT / "src/components/ToolCardList.tsx").read_text(encoding="utf-8")
 
-        self.assertRegex(source, r"^def\\s+scan_zai_quota\\(", "Z.AI must remain a provider quota integration")
-        self.assertIn("grok_bot:", cards, "Grok Bot must remain an independent first-class product")
+        self.assertIn(
+            "def scan_zai_quota(",
+            source,
+            "Z.AI must remain a provider quota integration",
+        )
+        self.assertIn(
+            "grok_bot:",
+            cards,
+            "Grok Bot must remain an independent first-class product",
+        )
 
 
 if __name__ == "__main__":
