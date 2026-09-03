@@ -39,5 +39,5 @@ jobs:
       - name: Frontend Build
         run: pnpm build
 
-      - name: Python Script Smoke Test
-        run: python3 usage.30s.py --json > /dev/null || true
+      - name: Python Test Suite & Contract Verification
+        run: python3 -m unittest discover -s tests -v

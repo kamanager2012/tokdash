@@ -33,6 +33,8 @@
     "dev": "vite",
     "build": "vite build",
     "typecheck": "tsc --noEmit",
+    "test": "python3 -m unittest discover -s tests -v",
+    "test:python": "python3 -m unittest discover -s tests -v",
     "start": "electron electron/main.cjs",
     "app": "vite build && electron electron/main.cjs"
   },
