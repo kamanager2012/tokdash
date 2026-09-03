@@ -107,22 +107,21 @@ test('IPC boundary rejects unknown channel, arguments, sender, subframe and untr
     });
   }, /Rejected IPC from non-main frame/);
 
+  const untrustedFrame = { url: 'file:///tmp/evil.html' };
+  const untrustedContents = { mainFrame: untrustedFrame };
   assert.throws(() => {
     assertTrustedIpcRequest({
       event: {
-        sender: webContents,
-        senderFrame: { url: 'file:///tmp/evil.html' },
+        sender: untrustedContents,
+        senderFrame: untrustedFrame,
       },
       mainWindow: {
-        webContents: {
-          ...webContents,
-          mainFrame: { url: 'file:///tmp/evil.html' },
-        },
+        webContents: untrustedContents,
         isDestroyed: () => false,
       },
       channel: IPC_CHANNELS.GET_SNAPSHOT,
       args: [],
       distIndex: DIST_INDEX,
     });
-  });
+  }, /Rejected IPC from untrusted URL/);
 });
