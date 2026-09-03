@@ -31,9 +31,9 @@ export const Header: React.FC<HeaderProps> = ({
   theme,
   onToggleTheme,
 }) => {
-  const handleMinimize = () => (window as any).tokdash?.minimizeWindow();
-  const handleMaximize = () => (window as any).tokdash?.toggleMaximize();
-  const handleClose = () => (window as any).tokdash?.closeWindow();
+  const handleMinimize = () => window.tokdash?.minimizeWindow();
+  const handleMaximize = () => window.tokdash?.toggleMaximize();
+  const handleClose = () => window.tokdash?.closeWindow();
 
   return (
     <header className="h-14 bg-white/80 dark:bg-[#14141a]/90 backdrop-blur-md border-b border-slate-200 dark:border-zinc-800/80 flex items-center justify-between px-4 select-none app-drag sticky top-0 z-50 transition-colors">
