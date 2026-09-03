@@ -13,7 +13,7 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6.svg)](https://www.typescriptlang.org/)
 [![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-3.x-38B2AC.svg)](https://tailwindcss.com/)
 
-[English](#-overview) | [中文说明](#-中文说明)
+**English** | [简体中文](README.zh-CN.md)
 
 </div>
 
@@ -21,27 +21,27 @@
 
 ## 📖 Overview
 
-**TokDash** is a dedicated Linux desktop dashboard and system tray utility designed for developers using autonomous AI coding tools. It performs low-overhead, passive, and non-invasive local log parsing across installed coding agents to provide visibility into **token volume**, **prompt cache reads**, **estimated USD expenditure**, and **per-project consumption**.
+**TokDash** is a dedicated Linux desktop dashboard and system tray utility for developers using autonomous AI coding tools. It performs low-overhead, passive, and non-invasive local log parsing across installed coding agents to provide visibility into **token volume**, **prompt cache reads**, **estimated USD expenditure**, and **per-project consumption**.
 
-Inspired by [cclank/tokei](https://github.com/cclank/tokei) (macOS menu bar app), TokDash is completely re-engineered as a modern Linux desktop application with dark/light themes, frameless window aesthetics, and live system tray integration.
+Inspired by [cclank/tokei](https://github.com/cclank/tokei) (a macOS menu bar app), TokDash is completely re-engineered as a modern Linux desktop application with dark/light themes, frameless window aesthetics, and live system tray integration.
 
 ---
 
 ## ✨ Features
 
-- 🔒 **Local-First & Transparent Privacy**: Reads local session transcripts and SQLite/JSONL cache files on your disk for passive accounting. No prompts, code, or context logs are ever uploaded to third-party telemetry servers. Official quota limits (if configured) interact solely with your authorized provider endpoints.
-- ⚡ **Full Token Metrics Breakdown**: Distinguishes **Prompt Input**, **Completion Output**, and **Cache Reads** (saving you from double-counting cached tokens).
-- 💰 **Configurable Cost Estimation**: Estimated using OpenRouter's 300+ model pricing catalog (`pricing.json`) combined with customizable local rate overrides (`pricing_overrides.json`) to accommodate private endpoints and discounts.
-- 📈 **Two-Week Daily Expense Trend**: Interactive daily bar chart with granular tool breakdown on hover.
+- 🔒 **Local-First & Transparent Privacy**: Reads local session transcripts and SQLite/JSONL cache files on your disk for passive accounting. No prompts, code, or context logs are uploaded to third-party telemetry servers. Official quota limits, when enabled, interact only with your authorized provider endpoints.
+- ⚡ **Full Token Metrics Breakdown**: Distinguishes **Prompt Input**, **Completion Output**, and **Cache Reads**, avoiding cache-token double counting.
+- 💰 **Configurable Cost Estimation**: Uses OpenRouter's model pricing catalog (`pricing.json`) together with customizable local rate overrides (`pricing_overrides.json`) for private endpoints, discounts, and explicit pricing provenance.
+- 📈 **Two-Week Daily Expense Trend**: Interactive daily bar chart with per-tool cost breakdowns on hover.
 - 🤖 **Multi-Agent Quota & Window Limits**: Real-time quota countdowns for Antigravity (Google AI Pro), Codex Plus/Pro, Cursor Ultra, and Grok.
 - 📂 **Workspace & Project Tracking**: Aggregates token spend and session counts per code repository and detects local listening ports.
-- 🌓 **Modern UI & System Tray**: Frameless dark/light mode with native Ubuntu system tray icon, window minimize-to-tray, and hotkey toggling.
+- 🌓 **Modern UI & System Tray**: Frameless dark/light mode with a native Ubuntu system tray icon, minimize-to-tray behavior, and hotkey toggling.
 
 ---
 
 ## 🛠️ Supported AI Coding Agents
 
-TokDash passively inspects standard local session logs (read-only) without acting as an interception proxy:
+TokDash passively inspects standard local session logs in read-only mode and does not act as an interception proxy.
 
 | Agent / Tool | Detection Target | Metrics Tracked |
 | :--- | :--- | :--- |
@@ -65,7 +65,7 @@ TokDash passively inspects standard local session logs (read-only) without actin
 - **Ubuntu / Debian Linux** (20.04+)
 - **Node.js** >= 18.0.0
 - **Python** >= 3.10
-- **pnpm** (recommended) or `npm`
+- **pnpm** recommended (or `npm`)
 
 ### Installation & Launch
 
@@ -74,7 +74,8 @@ TokDash passively inspects standard local session logs (read-only) without actin
 git clone https://github.com/kamanager2012/tokdash.git
 cd tokdash
 
-# 2. Run the automated installer (installs dependencies, builds UI, and creates desktop launcher)
+# 2. Run the automated installer
+#    (installs dependencies, builds the UI, and creates a desktop launcher)
 chmod +x install.sh
 ./install.sh
 
@@ -82,7 +83,7 @@ chmod +x install.sh
 ./start.sh
 ```
 
-> **Desktop Launcher**: After running `install.sh`, you can also press `Super` (Windows key) on Ubuntu, search for **TokDash**, and launch it directly from the application menu.
+> **Desktop Launcher**: After running `install.sh`, press `Super` (Windows key) on Ubuntu, search for **TokDash**, and launch it from the application menu.
 
 ### Development Mode
 
@@ -90,31 +91,20 @@ chmod +x install.sh
 # Install dependencies
 pnpm install
 
-# Start Vite dev server
+# Start the Vite development server
 pnpm dev
 
-# In another terminal, run Electron against dev server
+# In another terminal, run Electron against the development server
 pnpm start
 ```
 
 ---
 
-## 🇨🇳 中文说明
-
-### 核心设计与特性
-
-1. **专为 Linux 打造**：为 Ubuntu / Linux 桌面开发的独立 Electron 客户端，支持系统托盘常驻与深色/浅色主题。
-2. **被动只读解析**：直接扫描本地 `~/.codex/`、`~/.claude/` 等工具落盘的既有日志与 SQLite 数据库，不作为网络拦截代理（Proxy），完全不干扰原有 Agent 工作流。
-3. **细分 Token 吞吐与缓存**：明确区分 Prompt 输入、补全输出与缓存命中（Cache Read），避免将缓存读取重复计入新增流量。
-4. **透明公开估价**：基于 OpenRouter 实时价目库（`pricing.json`）与本地自定覆写表（`pricing_overrides.json`）进行费用测算与统计参考。
-5. **工程项目归属与监听检测**：根据会话的工作区路径聚合各个代码仓库的累计消耗，并附带检测当前运行的本地开发端口。
-
----
-
 ## 🤝 Contributing
 
-Contributions, issues, and feature requests are welcome!
-Please check out the [Contributing Guide](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md).
+Contributions, issues, and feature requests are welcome.
+
+Please read the [Contributing Guide](CONTRIBUTING.md) and [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ---
 
