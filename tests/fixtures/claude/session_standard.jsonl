@@ -1,0 +1,4 @@
+{"type":"user","timestamp":"2026-09-03T10:00:00Z","message":{"content":"Hello Claude, please optimize this function."}}
+{"type":"assistant","timestamp":"2026-09-03T10:00:05Z","cwd":"/workspace/tokdash-fixture","message":{"id":"msg_fixture_01","model":"claude-3-5-sonnet-20241022","usage":{"input_tokens":1500,"output_tokens":300,"cache_read_input_tokens":5000,"cache_creation_input_tokens":2000,"cache_creation":{"ephemeral_5m_input_tokens":2000}}}}
+{"type":"user","timestamp":"2026-09-03T10:01:00Z","message":{"content":"Now write tests for it."}}
+{"type":"assistant","timestamp":"2026-09-03T10:01:10Z","cwd":"/workspace/tokdash-fixture","message":{"id":"msg_fixture_02","model":"claude-3-5-sonnet-20241022","usage":{"input_tokens":1800,"output_tokens":500,"cache_read_input_tokens":8500,"cache_creation_input_tokens":0}}}
