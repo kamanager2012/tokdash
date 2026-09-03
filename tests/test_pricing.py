@@ -61,17 +61,32 @@ class TestPricingEngine(unittest.TestCase):
     def test_pricing_provenance_classification(self):
         resolve_pricing_entry = getattr(usage_module, "resolve_pricing_entry")
         
-        # 1. Exact catalog match (via explicit override alias)
-        cid, prov = resolve_pricing_entry("claude-3-5-sonnet-20241022")
-        self.assertEqual(prov, "exact")
+        # 1. Exact catalog match
+        cid, prov = resolve_pricing_entry("anthropic/claude-sonnet-4.6")
+        self.assertEqual(prov, "exact_catalog")
         self.assertEqual(cid, "anthropic/claude-sonnet-4.6")
 
-        # 2. Family proxy match
+        # 2. Exact alias (format normalization alias)
+        cid, prov = resolve_pricing_entry("grok-4.6-build")
+        self.assertEqual(prov, "exact_alias")
+        self.assertEqual(cid, "x-ai/grok-4.6")
+
+        # 3. Price equivalent mapping (inter-generational/replacement model)
+        cid, prov = resolve_pricing_entry("claude-3-5-sonnet-20241022")
+        self.assertEqual(prov, "price_equivalent")
+        self.assertEqual(cid, "anthropic/claude-sonnet-4.6")
+
+        # 4. Manual representative proxy
+        cid, prov = resolve_pricing_entry("Composer 2.5")
+        self.assertEqual(prov, "manual_proxy")
+        self.assertEqual(cid, "openai/gpt-5.5")
+
+        # 5. Family proxy match (heuristic keyword fallback)
         cid, prov = resolve_pricing_entry("claude-sonnet-experimental-v9")
         self.assertEqual(prov, "family_proxy")
         self.assertIn("sonnet", cid)
 
-        # 3. Completely unknown
+        # 6. Completely unknown
         cid, prov = resolve_pricing_entry("completely-unrecognized-vendor-model-999")
         self.assertEqual(prov, "unknown")
         self.assertIsNone(cid)

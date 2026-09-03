@@ -125,6 +125,9 @@ export const App: React.FC = () => {
 
         const name = m.name || m.model_id;
         const key = `${name} (${toolKey})`;
+        const pricingProvenance = m.pricing_provenance;
+        const pricingSource = m.pricing_source;
+        const costKind = m.cost_kind;
         if (!map[key]) {
           map[key] = {
             name: name,
@@ -138,6 +141,9 @@ export const App: React.FC = () => {
             tool: toolKey,
             cost_per_k: 0,
             out_ratio: 0,
+            pricing_provenance: pricingProvenance,
+            pricing_source: pricingSource,
+            cost_kind: costKind,
           };
         } else {
           map[key].cost += cost;
@@ -145,6 +151,11 @@ export const App: React.FC = () => {
           map[key].out += out;
           map[key].cr += cr;
           map[key].tokens += tokens;
+          if (!map[key].pricing_provenance && pricingProvenance) {
+            map[key].pricing_provenance = pricingProvenance;
+            map[key].pricing_source = pricingSource;
+            map[key].cost_kind = costKind;
+          }
         }
       });
     });

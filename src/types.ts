@@ -83,6 +83,9 @@ export interface TopModelRecord {
   tool: string;
   cost_per_k: number;
   out_ratio: number;
+  pricing_provenance?: 'exact_catalog' | 'exact_alias' | 'price_equivalent' | 'manual_proxy' | 'family_proxy' | 'authoritative' | 'unknown';
+  pricing_source?: string;
+  cost_kind?: string;
 }
 
 export interface CursorQuotaWindow {

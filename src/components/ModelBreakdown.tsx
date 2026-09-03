@@ -95,6 +95,70 @@ export const ModelBreakdown: React.FC<ModelBreakdownProps> = ({ models = [] }) =
                           推算
                         </span>
                       )}
+                      {(() => {
+                        const prov = m.pricing_provenance;
+                        if (prov === 'exact_catalog' || prov === 'exact_alias') {
+                          return (
+                            <span
+                              className="text-[9px] px-1 py-0.2 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-sans"
+                              title={`官方/目录精确计费: ${m.pricing_source || m.name}`}
+                            >
+                              精确
+                            </span>
+                          );
+                        }
+                        if (prov === 'price_equivalent') {
+                          return (
+                            <span
+                              className="text-[9px] px-1 py-0.2 rounded bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 font-sans"
+                              title={`替代费率等价映射: ${m.pricing_source || m.name}`}
+                            >
+                              等价
+                            </span>
+                          );
+                        }
+                        if (prov === 'manual_proxy') {
+                          return (
+                            <span
+                              className="text-[9px] px-1 py-0.2 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-sans"
+                              title={`人工指定代理模型: ${m.pricing_source || m.name}`}
+                            >
+                              代理
+                            </span>
+                          );
+                        }
+                        if (prov === 'family_proxy') {
+                          return (
+                            <span
+                              className="text-[9px] px-1 py-0.2 rounded bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 font-sans"
+                              title={`同家族关键词代理: ${m.pricing_source || m.name}`}
+                            >
+                              家族代理
+                            </span>
+                          );
+                        }
+                        if (prov === 'authoritative') {
+                          return (
+                            <span
+                              className="text-[9px] px-1 py-0.2 rounded bg-teal-500/10 text-teal-600 dark:text-teal-400 font-sans"
+                              title="本地日志权威入账"
+                            >
+                              权威账本
+                            </span>
+                          );
+                        }
+                        if (prov === 'unknown') {
+                          return (
+                            <span
+                              className="text-[9px] px-1 py-0.2 rounded bg-slate-500/10 text-slate-500 dark:text-slate-400 font-sans"
+                              title="未收录价格（按 0 记费）"
+                            >
+                              未知费率
+                            </span>
+                          );
+                        }
+                        return null;
+                      })()}
                     </div>
                   </td>
                   <td className="py-2.5 text-right font-bold text-slate-900 dark:text-zinc-100">

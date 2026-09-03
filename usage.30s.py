@@ -303,16 +303,37 @@ def _normalize(model: str):
     return m
 
 
+def _alias_target_and_prov(entry):
+    if isinstance(entry, dict):
+        return entry.get("target"), entry.get("provenance", "manual_proxy")
+    if isinstance(entry, str):
+        return entry, "exact_alias"
+    return None, "unknown"
+
+
 def resolve_pricing_entry(model: str):
-    """返回 (canonical_id, provenance)。provenance ∈ {'exact', 'family_proxy', 'unknown'}。"""
+    """返回 (canonical_id, provenance)。
+    provenance 严格分级:
+      - 'exact_catalog': 目录数据库或单价覆写中的原生 canonical ID
+      - 'exact_alias': 同名/同版本规范格式别名
+      - 'price_equivalent': 跨代/替代费率等价映射
+      - 'manual_proxy': 人工配置的代表模型代理
+      - 'family_proxy': 家族关键字粗分代理
+      - 'authoritative': 本地账本权威记录
+      - 'unknown': 未知
+    """
     s = (model or "").strip()
     if not s or s.lower() == "<synthetic>":
         return None, "unknown"
+
     if s in _OV_ALIASES:
-        return _OV_ALIASES[s], "exact"
+        target, prov = _alias_target_and_prov(_OV_ALIASES[s])
+        return target, prov
+
     norm = _normalize(model)
     if norm and (norm in _OV_MODELS or norm in _PRICING_DB or norm in _DEFAULT_PRICES):
-        return norm, "exact"
+        return norm, "exact_catalog"
+
     low = s.lower()
     if "gemini" in low:
         target = "google/gemini-3.1-pro-preview" if "pro" in low else "google/gemini-3.5-flash"
@@ -366,7 +387,8 @@ def _known_id_or_raw(model: str):
     if not s or s.lower() == "<synthetic>":
         return None
     if s in _OV_ALIASES:
-        return _OV_ALIASES[s]
+        target, _ = _alias_target_and_prov(_OV_ALIASES[s])
+        return target
     norm = _normalize(s)
     if norm and (norm in _OV_MODELS or norm in _PRICING_DB or norm in _DEFAULT_PRICES):
         return norm
@@ -385,7 +407,8 @@ def _model_identity_id(model: str):
     if not s or s.lower() == "<synthetic>":
         return None
     if s in _OV_ALIASES:
-        return _OV_ALIASES[s]
+        target, _ = _alias_target_and_prov(_OV_ALIASES[s])
+        return target
     norm = _normalize(s)
     if norm and (norm in _OV_MODELS or norm in _PRICING_DB or norm in _DEFAULT_PRICES):
         return norm
@@ -10955,7 +10978,7 @@ def build_daily_costs(period="all", refresh=True, _cache=None):
             for t in _TOOL_COST_KEYS
             if round(v.get(t, 0.0), 2) > 0
         }
-        total_cost = round(sum(v.get(t, 0.0) for t in _TOOL_COST_KEYS), 2)
+        total_cost = round(sum(tool_costs.values()), 2)
         daily.append({
             "date": dk,
             "total": total_cost,
@@ -11000,10 +11023,14 @@ def build_daily_costs(period="all", refresh=True, _cache=None):
         out_k = v["out"] / 1000 if v["out"] else 0
         cost_per_k = round(v["cost"] / out_k, 3) if out_k > 0 else 0
         out_ratio = round(v["out"] / total_tok * 100, 1) if total_tok > 0 else 0
+        price_id, prov = resolve_pricing_entry(n)
         model_list.append({"name": n, "cost": round(v["cost"], 2),
                            "in": v["in"], "out": v["out"], "cr": v.get("cr", 0), "cw": v.get("cw", 0),
                            "reason": v.get("reason", 0), "tokens": total_tok, "tool": v["tool"],
-                           "cost_per_k": cost_per_k, "out_ratio": out_ratio})
+                           "cost_per_k": cost_per_k, "out_ratio": out_ratio,
+                           "pricing_provenance": v.get("pricing_provenance") or prov,
+                           "pricing_source": v.get("pricing_source") or price_id or n,
+                           "cost_kind": v.get("cost_kind") or ("authoritative_log" if v["tool"] == "hermes" else "estimated_api")})
 
     def account_model_rows(specs):
         aggregated = {}
@@ -12273,23 +12300,67 @@ def _detect_local_servers(project_paths):
         return {}
 
 
-def _compute_state_digest(usage_data, daily_data):
-    """计算确定性数据世代摘要 (SHA-256)，检测并验证快照源自同一数据世代。"""
+def _canonical_snapshot_digest(usage_data, daily_data, projects_data):
+    """计算完整的规范化快照状态数据摘要 (Canonical State SHA-256 Digest)。
+    完整覆盖所有工具各时段全部计数 (in, out, cr, cw, reason, cost, sessions)、
+    所有每日历史行与工具拆分、以及项目归属数据。
+    任意维度与字段变动必定导致 digest 改变。
+    """
     import hashlib
-    summary = []
+
+    # 1. 抽取规范化 usage 状态映射
+    canonical_tools = {}
     for k in sorted(usage_data.keys()):
         if k.startswith("_"):
             continue
-        ranges = (usage_data.get(k) or {}).get("ranges", {})
-        all_r = ranges.get("all", {})
-        summary.append(f"{k}:{all_r.get('in', 0)}:{all_r.get('out', 0)}:{all_r.get('cr', 0)}:{all_r.get('cost', 0)}")
-    
+        tool_val = usage_data.get(k)
+        if not isinstance(tool_val, dict):
+            continue
+        ranges = tool_val.get("ranges") or {}
+        tool_ranges = {}
+        for rk in sorted(ranges.keys()):
+            r = ranges[rk]
+            tool_ranges[rk] = {
+                "in": r.get("in", 0),
+                "out": r.get("out", 0),
+                "cr": r.get("cr", 0) or r.get("cached", 0),
+                "cw": r.get("cw", 0),
+                "reason": r.get("reason", 0),
+                "cost": round(float(r.get("cost", 0.0) or 0.0), 4),
+                "sessions": len(r.get("sessions") or []) if isinstance(r.get("sessions"), (list, set)) else int(r.get("sessions") or 0),
+            }
+        canonical_tools[k] = tool_ranges
+
+    # 2. 抽取规范化 daily 数据
     days_list = daily_data.get("daily", []) if isinstance(daily_data, dict) else (daily_data if isinstance(daily_data, list) else [])
-    if days_list:
-        last_day = days_list[-1]
-        summary.append(f"daily:{last_day.get('date')}:{last_day.get('total')}:{last_day.get('tokens')}")
-    raw_payload = "|".join(summary).encode("utf-8")
-    return hashlib.sha256(raw_payload).hexdigest()[:16]
+    canonical_days = []
+    for d in days_list:
+        canonical_days.append({
+            "date": d.get("date"),
+            "total": round(float(d.get("total", 0.0) or 0.0), 2),
+            "tokens": d.get("tokens", 0),
+            "tool_costs": d.get("tool_costs") or {},
+        })
+
+    # 3. 抽取规范化 projects 数据
+    canonical_projects = []
+    for p in (projects_data or []):
+        canonical_projects.append({
+            "path": p.get("path"),
+            "cost": round(float(p.get("cost", 0.0) or 0.0), 2),
+            "tokens": p.get("tokens", 0),
+        })
+
+    state_obj = {
+        "tools": canonical_tools,
+        "daily": canonical_days,
+        "projects": canonical_projects,
+    }
+    canonical_json = json.dumps(state_obj, sort_keys=True, separators=(',', ':'))
+    return hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()[:16]
+
+
+_compute_state_digest = _canonical_snapshot_digest
 
 
 def snapshot():
@@ -12307,8 +12378,8 @@ def snapshot():
     daily_data = build_daily_costs(_arg_period(), refresh=False, _cache=latest_cache)
     projects_data = get_projects(refresh=False, _cache=latest_cache)
 
-    # 3. 真实计算基于该内存世代数据的确定性 SHA-256 状态摘要
-    gen_token = _compute_state_digest(usage_data, daily_data)
+    # 3. 真实计算基于该完整内存世代数据的规范化 SHA-256 状态摘要
+    gen_token = _canonical_snapshot_digest(usage_data, daily_data, projects_data)
 
     payload = {
         "snapshot_id": snap_id,
