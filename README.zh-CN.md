@@ -1,13 +1,15 @@
 <div align="center">
 
-# ⏱️ TokDash
+# 🧠 Cognitally
 
-**Linux / Ubuntu 桌面 AI Token 与费用监控器**
+**Linux / Ubuntu 主权 AI 编程 Agent 可观测性与 Token 成本账本**  
+*(原 TokDash 升级演进版 — 原生集成只读 Stdio MCP 服务与跨进程单飞防爆流式引擎)*
 
-*实时查看 AI 编程 Agent 的 Token 吞吐、提示词缓存与费用消耗。*
+*实时查看 AI 编程 Agent 的 Token 吞吐、提示词缓存、套餐额度与只读 MCP 控制面。*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Platform](https://img.shields.io/badge/Platform-Ubuntu%20%2F%20Linux-orange.svg)](https://ubuntu.com/)
+[![MCP 2024-11-05](https://img.shields.io/badge/MCP-2024--11--05-8A2BE2.svg)](https://modelcontextprotocol.io/)
 [![Electron](https://img.shields.io/badge/Electron-33.x-47848F.svg)](https://www.electronjs.org/)
 [![React](https://img.shields.io/badge/React-18.x-61DAFB.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6.svg)](https://www.typescriptlang.org/)
@@ -21,15 +23,19 @@
 
 ## 📖 项目简介
 
-**TokDash** 是一款面向 Linux 桌面的 AI 编程工具用量仪表盘与系统托盘应用，适合同时使用多个自主编程 Agent 的开发者。它通过低开销、被动、非侵入式地解析本机已有日志，集中展示 **Token 用量**、**提示词缓存读取**、**预估美元费用**以及**按项目归属的消耗情况**。
+**Cognitally**（源自 *Cognitive* [AI认知推理] + *Tally* [严肃核算盘点]）是一款面向 Linux 桌面的专业本地 AI 资源可观测性套件、CLI 命令行工具与标准 **Model Context Protocol (MCP)** 服务端。它通过被动、零泄露、跨进程单飞流式解析本机已有日志，集中度量 **Token 真实吞吐**、**提示词缓存读取**、**严谨定价出处**、**套餐订阅额度**以及**按工作区项目归属的消耗情况**。
 
-TokDash 的产品灵感来自 [cclank/tokei](https://github.com/cclank/tokei)（macOS 菜单栏应用），但针对 Linux 桌面进行了重新实现，提供深色/浅色主题、无边框窗口和系统托盘常驻等能力。
+内置平滑无缝的一次性自动迁移：老用户 `~/.config/tokdash` 与 `~/.tokei` 历史账本与配置会自动安全迁移至 `~/.config/cognitally/`。
 
 ---
 
 ## ✨ 主要功能
 
-- 🔒 **本地优先与透明隐私**：仅被动读取本机已有的会话记录以及 SQLite/JSONL 缓存文件。提示词、代码和上下文日志不会被上传到第三方遥测服务器；启用官方额度查询时，只会访问你已授权的服务商接口。
+- 🔌 **只读 Stdio MCP Server (`cognitally --mcp`)**：原生符合 MCP 2024-11-05 规范，支持 Claude Code、Cursor、Codex、OpenCode 等智能体直接挂载只读工具集（`get_usage`、`get_cost`、`get_quota`、`get_projects`、`get_models`、`get_accounting_status`），严格只读、零幻觉推荐。
+- ⚡ **跨进程单飞流式引擎**：引入 flock 文件级单飞快照门控，杜绝高并发并发解析导致的内存暴涨（规避传统扫描器 3.3GB~12GB 瞬时内存峰值）。
+- 🔒 **本地优先与透明隐私**：绝不上报任何代码或提示词。官方额度查询仅在具备本地合法凭据时直连官方端点。
+- 📤 **规范化数据导出 (`cognitally --export json/csv`)**：提供带状态世代摘要校验的结构化 JSON 与细粒度 CSV 导出。
+
 - ⚡ **完整 Token 指标拆分**：区分 **Prompt 输入**、**Completion 输出**与 **Cache Read**，避免缓存 Token 被重复计算。
 - 💰 **可配置费用估算**：使用 OpenRouter 模型价格目录（`pricing.json`），并结合本地可自定义费率覆写（`pricing_overrides.json`），支持私有端点、折扣以及显式的定价来源标记。
 - 📈 **近两周每日费用趋势**：通过交互式柱状图查看每日费用，并在悬停时展示各工具费用明细。
@@ -77,19 +83,23 @@ TokDash 以只读方式被动解析各工具标准的本机会话日志，不作
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/kamanager2012/tokdash.git
-cd tokdash
+git clone https://github.com/kamanager2012/cognitally.git
+cd cognitally
 
 # 2. 运行自动安装脚本
-#    （安装依赖、构建前端并创建桌面启动器）
+#    （安装依赖、构建前端并创建 'cognitally' CLI 及桌面启动器）
 chmod +x install.sh
 ./install.sh
 
-# 3. 启动 TokDash
-./start.sh
+# 3. CLI 与桌面端使用
+cognitally --doctor       # 运行系统环境与 14 款 Agent 采集器健康体检
+cognitally --mcp          # 启动标准 Stdio MCP 服务（供 Claude Code / Cursor / Codex 挂载）
+cognitally --export json  # 导出规范化原子快照至 JSON
+cognitally --export csv   # 导出细粒度每日模型消耗至 CSV
+./start.sh                # 启动无边框 Linux 桌面观测台
 ```
 
-> **桌面启动器**：执行 `install.sh` 后，可在 Ubuntu 中按下 `Super`（Windows 键），搜索 **TokDash**，直接从应用菜单启动。
+> **桌面启动器**：执行 `install.sh` 后，可在 Ubuntu 中按下 `Super`（Windows 键），搜索 **Cognitally**，直接从应用菜单启动。
 
 ### 开发模式
 

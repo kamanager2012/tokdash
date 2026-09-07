@@ -31,9 +31,10 @@ export const Header: React.FC<HeaderProps> = ({
   theme,
   onToggleTheme,
 }) => {
-  const handleMinimize = () => (window as any).tokdash?.minimizeWindow();
-  const handleMaximize = () => (window as any).tokdash?.toggleMaximize();
-  const handleClose = () => (window as any).tokdash?.closeWindow();
+  const bridge = (window as any).cognitally || (window as any).tokdash;
+  const handleMinimize = () => bridge?.minimizeWindow();
+  const handleMaximize = () => bridge?.toggleMaximize();
+  const handleClose = () => bridge?.closeWindow();
 
   return (
     <header className="h-14 bg-white/80 dark:bg-[#14141a]/90 backdrop-blur-md border-b border-slate-200 dark:border-zinc-800/80 flex items-center justify-between px-4 select-none app-drag sticky top-0 z-50 transition-colors">
@@ -45,7 +46,7 @@ export const Header: React.FC<HeaderProps> = ({
         <div>
           <div className="flex items-center gap-2">
             <span className="font-semibold text-sm tracking-wide text-slate-800 dark:text-zinc-100">
-              TokDash
+              Cognitally
             </span>
             <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-500/20">
               Linux

@@ -1,13 +1,15 @@
 <div align="center">
 
-# ⏱️ TokDash
+# 🧠 Cognitally
 
-**Desktop AI Token & Cost Monitor for Linux / Ubuntu**
+**Sovereign AI Coding Agent Observability & Token Cost Ledger for Linux / Ubuntu**  
+*(Formerly TokDash — evolved with Stdio MCP Server & Single-Flight Streaming)*
 
-*Real-time token throughput, prompt caching, and expenditure tracking for AI coding agents.*
+*Real-time token throughput, prompt caching, quota tracking, and read-only MCP control plane for AI coding agents.*
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Platform](https://img.shields.io/badge/Platform-Ubuntu%20%2F%20Linux-orange.svg)](https://ubuntu.com/)
+[![MCP 2024-11-05](https://img.shields.io/badge/MCP-2024--11--05-8A2BE2.svg)](https://modelcontextprotocol.io/)
 [![Electron](https://img.shields.io/badge/Electron-33.x-47848F.svg)](https://www.electronjs.org/)
 [![React](https://img.shields.io/badge/React-18.x-61DAFB.svg)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6.svg)](https://www.typescriptlang.org/)
@@ -21,15 +23,19 @@
 
 ## 📖 Overview
 
-**TokDash** is a dedicated Linux desktop dashboard and system tray utility for developers using autonomous AI coding tools. It performs low-overhead, passive, and non-invasive local log parsing across installed coding agents to provide visibility into **token volume**, **prompt cache reads**, **estimated USD expenditure**, and **per-project consumption**.
+**Cognitally** (from *Cognitive* + *Tally*) is a local-first, low-overhead desktop observatory, CLI tool, and standard **Model Context Protocol (MCP)** server for developers using autonomous AI coding tools. It performs passive, zero-leakage local log parsing across 14 mainstream coding agents to provide mathematical certainty into **token volume**, **cache reads**, **cost provenance**, **subscription quotas**, and **project attribution**.
 
-Inspired by [cclank/tokei](https://github.com/cclank/tokei) (a macOS menu bar app), TokDash is completely re-engineered as a modern Linux desktop application with dark/light themes, frameless window aesthetics, and live system tray integration.
+Automatic seamless one-time migration is supported from legacy `~/.config/tokdash` and `~/.tokei`.
 
 ---
 
 ## ✨ Features
 
-- 🔒 **Local-First & Transparent Privacy**: Reads local session transcripts and SQLite/JSONL cache files on your disk for passive accounting. No prompts, code, or context logs are uploaded to third-party telemetry servers. Official quota limits, when enabled, interact only with your authorized provider endpoints.
+- 🔌 **Read-Only Stdio MCP Server (`cognitally --mcp`)**: Native support for the MCP specification (2024-11-05). Claude Code, Cursor, Codex, and OpenCode can query current token consumption, quotas, and costs directly via 6 strictly read-only tools (`get_usage`, `get_cost`, `get_quota`, `get_projects`, `get_models`, `get_accounting_status`).
+- ⚡ **Single-Flight Refresh & Streaming Engine**: Shared flock-protected canonical snapshots prevent redundant concurrent parsing and eliminate memory spikes on live rollouts.
+- 🔒 **Local-First & Transparent Privacy**: Reads local session transcripts and SQLite/JSONL cache files on your disk for passive accounting. No prompts, code, or context logs are uploaded to third-party telemetry servers.
+- 📤 **Canonical Export (`cognitally --export json/csv`)**: Export deterministic, schema-versioned token and cost datasets to JSON or CSV.
+
 - ⚡ **Full Token Metrics Breakdown**: Distinguishes **Prompt Input**, **Completion Output**, and **Cache Reads**, avoiding cache-token double counting.
 - 💰 **Configurable Cost Estimation**: Uses OpenRouter's model pricing catalog (`pricing.json`) together with customizable local rate overrides (`pricing_overrides.json`) for private endpoints, discounts, and explicit pricing provenance.
 - 📈 **Two-Week Daily Expense Trend**: Interactive daily bar chart with per-tool cost breakdowns on hover.
@@ -77,19 +83,23 @@ TokDash passively inspects standard local session logs in read-only mode and doe
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/kamanager2012/tokdash.git
-cd tokdash
+git clone https://github.com/kamanager2012/cognitally.git
+cd cognitally
 
 # 2. Run the automated installer
-#    (installs dependencies, builds the UI, and creates a desktop launcher)
+#    (installs dependencies, builds UI, and creates 'cognitally' CLI + desktop launcher)
 chmod +x install.sh
 ./install.sh
 
-# 3. Launch TokDash
-./start.sh
+# 3. CLI & Desktop Usage
+cognitally --doctor       # Run system & 14-agent health check
+cognitally --mcp          # Launch standard Stdio MCP server for Claude Code / Codex / Cursor
+cognitally --export json  # Export canonical snapshot to JSON
+cognitally --export csv   # Export daily model breakdown to CSV
+./start.sh                # Launch frameless Linux desktop observatory
 ```
 
-> **Desktop Launcher**: After running `install.sh`, press `Super` (Windows key) on Ubuntu, search for **TokDash**, and launch it from the application menu.
+> **Desktop Launcher**: After running `install.sh`, press `Super` (Windows key) on Ubuntu, search for **Cognitally**, and launch it from the application menu.
 
 ### Development Mode
 

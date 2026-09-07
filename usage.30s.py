@@ -162,13 +162,29 @@ KIMI_CODE_DIR = os.path.abspath(os.path.expanduser(
     or os.environ.get("KIMI_SHARE_DIR") or _KIMI_CODE_DEFAULT_DIR))
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-_USER_DIR = os.path.join(HOME, ".tokei")
+_CONFIG_BASE = os.environ.get("XDG_CONFIG_HOME", os.path.join(HOME, ".config"))
+_COGNITALLY_DIR = os.path.join(_CONFIG_BASE, "cognitally")
+_LEGACY_TOKDASH_DIR = os.path.join(_CONFIG_BASE, "tokdash")
+_LEGACY_TOKEI_DIR = os.path.join(HOME, ".tokei")
+
+_USER_DIR = (
+    os.environ.get("COGNITALLY_DIR")
+    or os.environ.get("TOKDASH_DIR")
+    or os.environ.get("TOKEI_DIR")
+    or _COGNITALLY_DIR
+)
 
 def _writable_path(name):
-    """优先用 ~/.tokei/ 下的可写副本,没有则用脚本同目录(开发模式)。"""
+    """优先用 ~/.config/cognitally/ 下的可写副本, 兼容 legacy ~/.config/tokdash 与 ~/.tokei, 没有则用脚本同目录(开发模式)。"""
     user = os.path.join(_USER_DIR, name)
     if os.path.isfile(user):
         return user
+    legacy_td = os.path.join(_LEGACY_TOKDASH_DIR, name)
+    if os.path.isfile(legacy_td):
+        return legacy_td
+    legacy_tk = os.path.join(_LEGACY_TOKEI_DIR, name)
+    if os.path.isfile(legacy_tk):
+        return legacy_tk
     base = os.path.join(BASE_DIR, name)
     if os.path.isfile(base):
         if ".app/" in BASE_DIR:
@@ -585,13 +601,63 @@ _LEGACY_SCAN_CACHE_FILE = os.path.join(
 _PREV_TOKEI_CACHE_FILE = os.path.join(
     HOME, ".tokei", "cache", "scan_cache.json")
 _SCAN_CACHE_DIR = (
-    os.environ.get("TOKDASH_CACHE_DIR")
+    os.environ.get("COGNITALLY_CACHE_DIR")
+    or os.environ.get("TOKDASH_CACHE_DIR")
     or os.environ.get("TOKEI_CACHE_DIR")
-    or os.path.join(os.environ.get("XDG_CONFIG_HOME", os.path.join(HOME, ".config")), "tokdash")
+    or _COGNITALLY_DIR
 )
 _DEFAULT_SCAN_CACHE_FILE = os.path.join(
     _SCAN_CACHE_DIR, "scan_cache.json")
 _SCAN_CACHE_FILE = _DEFAULT_SCAN_CACHE_FILE
+
+def _migrate_legacy_cognitally_state():
+    """One-time migration from ~/.config/tokdash and ~/.tokei to ~/.config/cognitally."""
+    if _USER_DIR != _COGNITALLY_DIR and _SCAN_CACHE_DIR != _COGNITALLY_DIR:
+        return
+    marker = os.path.join(_COGNITALLY_DIR, ".migration_done")
+    if os.path.exists(marker):
+        return
+    import shutil
+    try:
+        os.makedirs(_COGNITALLY_DIR, mode=0o700, exist_ok=True)
+        files_to_check = [
+            ("scan_cache.json", [
+                os.path.join(_LEGACY_TOKDASH_DIR, "scan_cache.json"),
+                os.path.join(_LEGACY_TOKEI_DIR, "cache", "scan_cache.json"),
+                _LEGACY_SCAN_CACHE_FILE
+            ]),
+            ("ledger.json", [
+                os.path.join(_LEGACY_TOKDASH_DIR, "ledger.json"),
+                os.path.join(_LEGACY_TOKEI_DIR, "ledger.json")
+            ]),
+            ("config.json", [
+                os.path.join(_LEGACY_TOKDASH_DIR, "config.json"),
+                os.path.join(_LEGACY_TOKEI_DIR, "config.json")
+            ]),
+            ("pricing.json", [
+                os.path.join(_LEGACY_TOKDASH_DIR, "pricing.json"),
+                os.path.join(_LEGACY_TOKEI_DIR, "pricing.json")
+            ]),
+            ("pricing_overrides.json", [
+                os.path.join(_LEGACY_TOKDASH_DIR, "pricing_overrides.json"),
+                os.path.join(_LEGACY_TOKEI_DIR, "pricing_overrides.json")
+            ]),
+        ]
+        for filename, candidates in files_to_check:
+            target = os.path.join(_COGNITALLY_DIR, filename)
+            if not os.path.exists(target):
+                for cand in candidates:
+                    if cand and os.path.isfile(cand):
+                        try:
+                            shutil.copyfile(cand, target)
+                            os.chmod(target, 0o600)
+                            break
+                        except OSError:
+                            pass
+        with open(marker, "w", encoding="utf-8") as mf:
+            mf.write(f"Migrated at {datetime.now().astimezone().isoformat()}\n")
+    except Exception:
+        pass
 _SCAN_CACHE_VERSION = 21
 _SCAN_CACHE_MIGRATABLE_VERSION = 19
 _CODEX_EVENT_CACHE_SUFFIX = ".codex-events"
@@ -709,9 +775,10 @@ def _save_scan_cache(cache):
 # 语义:现存日志实时计算为准;某天实时值低于账本(=日志被清)时,用账本兜底。
 # 独立于 scan cache 的版本机制,永不因解析器/缓存升级而失效。
 _LEDGER_FILE = (
-    os.environ.get("TOKDASH_LEDGER_FILE")
+    os.environ.get("COGNITALLY_LEDGER_FILE")
+    or os.environ.get("TOKDASH_LEDGER_FILE")
     or os.environ.get("TOKEI_LEDGER_FILE")
-    or os.path.join(HOME, ".tokei", "ledger.json")
+    or os.path.join(_USER_DIR, "ledger.json")
 )
 _LEDGER_VERSION = 1
 _LEDGER_FIELDS = ("in", "out", "cr", "cw", "reason", "cached", "cost")
@@ -10953,36 +11020,114 @@ _canonical_snapshot_digest = _canonical_accounting_digest
 _compute_state_digest = _canonical_accounting_digest
 
 
+_SNAPSHOT_CACHE_FILE = os.path.join(_SCAN_CACHE_DIR, "canonical_snapshot.json")
+_SNAPSHOT_LOCK_FILE = os.path.join(_SCAN_CACHE_DIR, "canonical_snapshot.lock")
+_SNAPSHOT_TTL = 5.0
+
+
+def get_canonical_snapshot(ttl=5.0, force=False):
+    """原子一致性快照(带跨进程单飞防护): 仅执行单次 compute(), 在单一内存世代内派生 usage, daily_costs 和 projects。
+    
+    多进程(如 MCP Server, Electron UI, 命令行)同时请求时，仅有一个进程计算，其余等待并直接复用新鲜快照，彻底杜绝内存风暴与重叠计算。
+    """
+    _migrate_legacy_cognitally_state()
+    try:
+        os.makedirs(_SCAN_CACHE_DIR, mode=0o700, exist_ok=True)
+    except OSError:
+        pass
+
+    # 1. 快速路径: 若缓存文件存在且在 TTL 内，直接读取返回
+    if not force and os.path.isfile(_SNAPSHOT_CACHE_FILE):
+        try:
+            mtime = os.path.getmtime(_SNAPSHOT_CACHE_FILE)
+            if _time.time() - mtime < ttl:
+                with open(_SNAPSHOT_CACHE_FILE, "r", encoding="utf-8") as f:
+                    cached = json.load(f)
+                if isinstance(cached, dict) and "generation" in cached and "usage" in cached:
+                    return cached
+        except Exception:
+            pass
+
+    # 2. 跨进程单飞锁
+    lock_fd = None
+    try:
+        lock_fd = os.open(_SNAPSHOT_LOCK_FILE, os.O_CREAT | os.O_RDWR, 0o600)
+        import fcntl
+        fcntl.flock(lock_fd, fcntl.LOCK_EX)
+
+        # 再次检查: 排队等待锁期间是否已有先行进程计算完成
+        if not force and os.path.isfile(_SNAPSHOT_CACHE_FILE):
+            try:
+                mtime = os.path.getmtime(_SNAPSHOT_CACHE_FILE)
+                if _time.time() - mtime < ttl:
+                    with open(_SNAPSHOT_CACHE_FILE, "r", encoding="utf-8") as f:
+                        cached = json.load(f)
+                    if isinstance(cached, dict) and "generation" in cached and "usage" in cached:
+                        return cached
+            except Exception:
+                pass
+
+        import uuid
+        snap_id = str(uuid.uuid4())
+        gen_time = datetime.now().astimezone().isoformat()
+
+        # 核心计算并获取当前内存世代引用，完全避开磁盘读取窗口
+        usage_data, latest_cache = compute(return_cache=True)
+        meta = _load_json(PRICING_FILE, {}).get("_meta", {})
+        usage_data["_pricing"] = {"updated_at": meta.get("updated_at", ""), "count": meta.get("count", 0)}
+
+        # 同一内存 generation 派生
+        daily_data = build_daily_costs(_arg_period(), refresh=False, _cache=latest_cache)
+        projects_data = get_projects(refresh=False, _cache=latest_cache)
+
+        # 真实计算基于该完整内存世代数据的规范化 SHA-256 状态摘要
+        gen_token = _canonical_snapshot_digest(usage_data, daily_data, projects_data)
+
+        payload = {
+            "snapshot_id": snap_id,
+            "generation": gen_token,
+            "generated_at": gen_time,
+            "usage": usage_data,
+            "daily_costs": daily_data,
+            "projects": projects_data,
+        }
+
+        # 原子落盘快照缓存
+        tmp = None
+        try:
+            fd, tmp = _tempfile.mkstemp(prefix=".snap-", suffix=".json", dir=_SCAN_CACHE_DIR)
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump(payload, f, separators=(',', ':'), ensure_ascii=False)
+            os.chmod(tmp, 0o600)
+            os.replace(tmp, _SNAPSHOT_CACHE_FILE)
+        except Exception:
+            if tmp and os.path.exists(tmp):
+                try:
+                    os.unlink(tmp)
+                except OSError:
+                    pass
+        return payload
+    finally:
+        if lock_fd is not None:
+            try:
+                import fcntl
+                fcntl.flock(lock_fd, fcntl.LOCK_UN)
+            except OSError:
+                pass
+            try:
+                os.close(lock_fd)
+            except OSError:
+                pass
+
+
 def snapshot():
-    """原子一致性快照: 仅执行单次 compute(), 在单一内存世代内派生 usage, daily_costs 和 projects。"""
-    import uuid
-    snap_id = str(uuid.uuid4())
-    gen_time = datetime.now().astimezone().isoformat()
-
-    # 1. 核心计算并获取当前内存世代引用，完全避开磁盘读取窗口
-    usage_data, latest_cache = compute(return_cache=True)
-    meta = _load_json(PRICING_FILE, {}).get("_meta", {})
-    usage_data["_pricing"] = {"updated_at": meta.get("updated_at", ""), "count": meta.get("count", 0)}
-
-    # 2. 同一内存 generation 派生
-    daily_data = build_daily_costs(_arg_period(), refresh=False, _cache=latest_cache)
-    projects_data = get_projects(refresh=False, _cache=latest_cache)
-
-    # 3. 真实计算基于该完整内存世代数据的规范化 SHA-256 状态摘要
-    gen_token = _canonical_snapshot_digest(usage_data, daily_data, projects_data)
-
-    payload = {
-        "snapshot_id": snap_id,
-        "generation": gen_token,
-        "generated_at": gen_time,
-        "usage": usage_data,
-        "daily_costs": daily_data,
-        "projects": projects_data,
-    }
+    """输出原子一致性快照 JSON。"""
+    force = "--force" in sys.argv or "--refresh" in sys.argv
+    payload = get_canonical_snapshot(force=force)
     print(json.dumps(payload, ensure_ascii=False))
 
 
-def doctor(as_json=False):
+def doctor(as_json=False, return_dict=False):
     """诊断本机各主流 AI Coding Agent 采集器路径、健康度与元数据可用性。"""
     import platform
     
@@ -11042,13 +11187,16 @@ def doctor(as_json=False):
         "agents": probes,
     }
 
+    if return_dict:
+        return report
+
     if as_json:
         print(json.dumps(report, indent=2, ensure_ascii=False))
         return 0
 
     # ASCII Format
     print("=" * 82)
-    print("🩺 TokDash Doctor — AI Agent Health & Collector Diagnostics")
+    print("🩺 Cognitally / TokDash Doctor — AI Agent Health & Collector Diagnostics")
     print(f"System: {meta_info['platform']} | Python: {meta_info['python_version']}")
     print(f"Pricing Catalog: {meta_info['pricing_models_count']} models | Overrides: {meta_info['pricing_overrides_count']} rules")
     print("=" * 82)
@@ -11061,13 +11209,32 @@ def doctor(as_json=False):
         print(f"{p['name']:<28} {status_str:<14} {p['files']:<8} {act:<18} {health_icon}")
     print("=" * 82)
     print(f"Detected {meta_info['active_collectors']}/{len(probes)} mainstream coding agents on this machine.")
-    print("Run `tokdash` or `./start.sh` to launch desktop observatory.")
+    print("Run `cognitally` (or `tokdash`) or `./start.sh` to launch desktop observatory.")
     return 0
 
 
 if __name__ == "__main__":
     if "--doctor" in sys.argv:
         sys.exit(doctor(as_json="--json" in sys.argv))
+    elif "--mcp" in sys.argv:
+        from mcp_server import serve_stdio
+        serve_stdio()
+    elif "--export" in sys.argv:
+        from export_engine import export_canonical_dataset
+        fmt = "json"
+        for i, a in enumerate(sys.argv):
+            if a == "--export" and i + 1 < len(sys.argv) and not sys.argv[i + 1].startswith("-"):
+                fmt = sys.argv[i + 1]
+        out_path = None
+        for i, a in enumerate(sys.argv):
+            if a == "--out" and i + 1 < len(sys.argv):
+                out_path = sys.argv[i + 1]
+        snap = get_canonical_snapshot(force="--force" in sys.argv)
+        content = export_canonical_dataset(snap, format_type=fmt, period=_arg_period(), out_path=out_path)
+        if not out_path:
+            sys.stdout.write(content)
+            if not content.endswith("\n"):
+                sys.stdout.write("\n")
     elif "--update-prices" in sys.argv:
         sys.exit(update_prices())
     elif "--update-unknown" in sys.argv:

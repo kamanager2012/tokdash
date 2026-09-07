@@ -1,22 +1,24 @@
 {
-  "name": "tokdash",
+  "name": "cognitally",
   "version": "0.1.0",
   "packageManager": "pnpm@11.21.0",
-  "description": "Desktop AI Token & Cost Monitor for Ubuntu/Linux",
+  "description": "Sovereign AI Coding Agent Observability & Token Cost Ledger for Ubuntu/Linux",
   "author": "kamanager2012",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/kamanager2012/tokdash.git"
+    "url": "https://github.com/kamanager2012/cognitally.git"
   },
   "bugs": {
-    "url": "https://github.com/kamanager2012/tokdash/issues"
+    "url": "https://github.com/kamanager2012/cognitally/issues"
   },
-  "homepage": "https://github.com/kamanager2012/tokdash#readme",
+  "homepage": "https://github.com/kamanager2012/cognitally#readme",
   "keywords": [
     "ai",
     "tokens",
     "cost-monitor",
+    "mcp",
+    "observability",
     "claude-code",
     "codex",
     "antigravity",
@@ -39,7 +41,9 @@
     "test:python": "python3 -m unittest discover -s tests -v",
     "start": "electron electron/main.cjs",
     "app": "vite build && electron electron/main.cjs",
-    "doctor": "python3 usage.30s.py --doctor"
+    "doctor": "python3 usage.30s.py --doctor",
+    "mcp": "python3 usage.30s.py --mcp",
+    "export": "python3 usage.30s.py --export"
   },
   "dependencies": {
     "clsx": "^2.1.1",

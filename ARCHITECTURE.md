@@ -1,36 +1,39 @@
-# 🏛️ TokDash Architecture & Strategic Roadmap
+# 🏛️ Cognitally Architecture & Strategic Roadmap
 
 > **Target Architecture, Two-Dimensional Provenance Model, and System Design Guidelines**  
-> *Last Updated: 2026-09-04*
+> *(Formerly TokDash — Evolved to Sovereign Observability & Stdio MCP Protocol)*  
+> *Last Updated: 2026-09-07*
 
 ---
 
 ## 1. Product Positioning & Strategic Vision
 
-TokDash is a local-first, low-overhead desktop application for Linux/Ubuntu designed to passively monitor, account for, and optimize AI coding agent token consumption, quotas, and expenditures.
+Cognitally is a local-first, low-overhead desktop application, CLI tool, and standard Model Context Protocol (MCP) server for Linux/Ubuntu designed to passively monitor, account for, and optimize AI coding agent token consumption, quotas, and expenditures.
 
-### Evolutionary Roadmap
+### Evolutionary Roadmap & Implemented Milestones
 
 ```text
-[Current Baseline]
+[Milestone 1: Complete]
 L1: Trusted AI Usage Observatory (可信 AI 编程用量观察者)
     - Distinguish Input, Output, Cache Read, and Reasoning tokens
     - Rigorous deduplication & mathematical reconciliation invariants
     - Fail-closed pricing overrides and granular provenance contracts
     - Native Linux Electron frameless desktop & system tray integration
 
-[Next Phase: In Progress]
+[Milestone 2: Complete]
 L2: Trusted AI Resource Observatory (可信 AI 资源与订阅观察站)
     - Two-Dimensional Provenance Model: Measurement × Pricing Provenance
-    - Unified Subscription & QuotaWindow domain models (shared windows, saturation)
-    - Standardized internal Collector Contracts (detect / scan / health)
-    - Diagnostic subsystem (`tokdash doctor`)
+    - Standardized internal Collector Contracts across 14 mainstream coding agents
+    - Self-diagnostic health check subsystem (`cognitally --doctor`)
+    - Single-Flight Refresh & Cross-Process Lock Engine (zero memory spikes on 400MB rollouts)
+    - Seamless silent one-time migration from ~/.config/tokdash and ~/.tokei
 
-[Future Phase]
-L3: Agent-Readable Resource Control Plane (智能 Agent 可读控制平面)
-    - Read-only Stdio MCP Server (get_usage, get_cost, get_quota, get_remaining)
-    - Non-intrusive local desktop quota saturation alerts (80%, 95%, 100%)
-    - Utility-driven quota-aware recommendation (marginal cost × remaining capacity)
+[Milestone 3: Complete]
+L3: Agent-Readable Sovereign Resource Control Plane (智能 Agent 可读控制平面)
+    - Read-Only Stdio MCP Server (`cognitally --mcp`) conforming to 2024-11-05 spec
+    - 6 Core MCP Tools: get_usage, get_cost, get_quota, get_projects, get_models, get_accounting_status
+    - Single-Flight Canonical Snapshot Reuse across CLI, UI, and MCP
+    - Canonical Schema-Versioned Export (`cognitally --export json/csv`)
 ```
 
 ---

@@ -31,13 +31,13 @@ function createTray() {
   try {
     const icon = nativeImage.createFromPath(ICON_PATH);
     tray = new Tray(icon.resize({ width: 22, height: 22 }));
-    tray.setToolTip('TokDash - AI 编程用量监控');
+    tray.setToolTip('Cognitally - AI 编程用量监控');
     
     const contextMenu = Menu.buildFromTemplate([
       { label: '显示窗口', click: () => { mainWindow?.show(); mainWindow?.focus(); } },
       { label: '隐藏窗口', click: () => { mainWindow?.hide(); } },
       { type: 'separator' },
-      { label: '退出 TokDash', click: () => { app.isQuitting = true; app.quit(); } }
+      { label: '退出 Cognitally', click: () => { app.isQuitting = true; app.quit(); } }
     ]);
     
     tray.setContextMenu(contextMenu);

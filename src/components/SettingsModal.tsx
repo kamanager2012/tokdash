@@ -21,7 +21,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     setUpdating(true);
     setUpdateMsg(null);
     try {
-      await (window as any).tokdash?.updatePrices();
+      const bridge = (window as any).cognitally || (window as any).tokdash;
+      await bridge?.updatePrices();
       setUpdateMsg('价格表已更新至最新！');
     } catch (e: any) {
       setUpdateMsg('更新失败: ' + (e?.message || '网络错误'));
@@ -86,8 +87,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <Shield className="w-4 h-4 text-emerald-500" />
               <span>本地优先架构与防双重计费</span>
             </div>
-            <p className="text-slate-500 dark:text-zinc-400 leading-relaxed text-[11px]">
-              TokDash 采用本地优先架构，默认被动解析本地工具存储目录（如 ~/.codex/、~/.claude/、~/.cursor/、~/.codebuddy/），绝不上报代码或提示词。官方配额查询仅在具备本地凭据时直连对应官方接口。
+            <p className="text-xs text-slate-500 dark:text-zinc-400 leading-relaxed">
+              Cognitally 采用本地优先架构，默认被动解析本地工具存储目录（如 ~/.codex/、~/.claude/、~/.cursor/、~/.codebuddy/），绝不上报代码或提示词。官方配额查询仅在具备本地凭据时直连对应官方接口。
             </p>
           </div>
 
@@ -97,7 +98,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               <span>数据存储路径</span>
             </div>
             <div className="bg-slate-100 dark:bg-zinc-900/60 p-2.5 rounded-lg font-mono text-[10px] text-slate-600 dark:text-zinc-400 break-all space-y-1">
-              <div>~/.config/tokdash/scan_cache.json (增量缓存)</div>
+              <div>~/.config/cognitally/scan_cache.json (增量缓存，自动兼容迁移旧配置)</div>
               <div>pricing_overrides.json (项目根目录下费率与别名覆写)</div>
             </div>
           </div>

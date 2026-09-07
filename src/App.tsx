@@ -33,7 +33,7 @@ export const App: React.FC = () => {
 
   // Theme support: dark / light
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
-    return (localStorage.getItem('tokdash-theme') as 'dark' | 'light') || 'dark';
+    return ((localStorage.getItem('cognitally-theme') || localStorage.getItem('tokdash-theme')) as 'dark' | 'light') || 'dark';
   });
 
   useEffect(() => {
@@ -45,22 +45,34 @@ export const App: React.FC = () => {
       root.classList.remove('dark');
       root.classList.add('light');
     }
-    localStorage.setItem('tokdash-theme', theme);
+    localStorage.setItem('cognitally-theme', theme);
   }, [theme]);
 
   const toggleTheme = () => {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
 
+  const lastGenerationRef = React.useRef<string>('');
+  const isFirstMountRef = React.useRef<boolean>(true);
+
   const loadData = useCallback(async () => {
-    setLoading(true);
+    if (isFirstMountRef.current) {
+      setLoading(true);
+    }
     try {
-      const bridge = (window as any).tokdash;
+      const bridge = (window as any).cognitally || (window as any).tokdash;
       if (bridge) {
         if (typeof bridge.fetchSnapshot === 'function') {
           // Unified Atomic Snapshot: 1 process, 1 compute(), zero lock contention
           const snapshot = await bridge.fetchSnapshot();
           if (snapshot && snapshot.usage) {
+            // Silent state swap: skip DOM re-renders if generation is identical
+            if (snapshot.generation && snapshot.generation === lastGenerationRef.current) {
+              return;
+            }
+            if (snapshot.generation) {
+              lastGenerationRef.current = snapshot.generation;
+            }
             setUsage(snapshot.usage);
             if (Array.isArray(snapshot.projects)) setProjects(snapshot.projects);
             if (snapshot.daily_costs) {
@@ -95,15 +107,30 @@ export const App: React.FC = () => {
     } catch (err) {
       console.error('Failed to load tokdash data:', err);
     } finally {
-      setLoading(false);
+      if (isFirstMountRef.current) {
+        isFirstMountRef.current = false;
+        setLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
-    loadData();
-    // Auto-refresh every 30 seconds
-    const timer = setInterval(loadData, 30_000);
-    return () => clearInterval(timer);
+    let timerId: ReturnType<typeof setTimeout> | null = null;
+    let isCancelled = false;
+
+    const runLoop = async () => {
+      await loadData();
+      if (!isCancelled) {
+        timerId = setTimeout(runLoop, 30_000);
+      }
+    };
+
+    runLoop();
+
+    return () => {
+      isCancelled = true;
+      if (timerId) clearTimeout(timerId);
+    };
   }, [loadData]);
 
   // Dynamically compute model usage matching the CURRENT period across all scanned tools
