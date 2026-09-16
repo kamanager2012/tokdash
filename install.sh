@@ -13,8 +13,13 @@ fi
 
 # 2. 检查 Node.js
 if ! command -v node &>/dev/null; then
-    echo "错误: 未找到 node，请先安装 Node.js (>=18)"
+    echo "错误: 未找到 node，请先安装 Node.js (>=22.12，Electron 44 要求)"
     exit 1
+fi
+NODE_MAJOR=$(node -p "process.versions.node.split('.')[0]" 2>/dev/null || echo 0)
+NODE_MINOR=$(node -p "process.versions.node.split('.')[1]" 2>/dev/null || echo 0)
+if [ "$NODE_MAJOR" -lt 22 ] || { [ "$NODE_MAJOR" -eq 22 ] && [ "$NODE_MINOR" -lt 12 ]; }; then
+    echo "警告: 当前 Node $(node -v)。Electron 44 官方要求 >=22.12；安装可能带 EBADENGINE 警告。"
 fi
 
 cd "$DIR"
