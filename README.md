@@ -77,7 +77,7 @@ Cognitally passively inspects standard local session logs in read-only mode and 
 - **Ubuntu / Debian Linux** (20.04+)
 - **Node.js** >= 22.12.0
 - **Python** >= 3.10
-- **pnpm@9** recommended (Node ≥22.12); `npm install` also works
+- **npm** (Node ≥22.12). `pnpm` optional if corepack works on your machine
 
 ### Installation & Launch
 
@@ -105,13 +105,13 @@ cognitally --export csv   # Export daily model breakdown to CSV
 
 ```bash
 # Install dependencies
-pnpm install
+npm install
 
 # Start the Vite development server
-pnpm dev
+npm run dev
 
 # In another terminal, run Electron against the development server
-pnpm start
+npm start
 ```
 
 ---

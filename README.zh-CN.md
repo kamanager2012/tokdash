@@ -77,7 +77,7 @@ Cognitally 以只读方式被动解析各工具标准的本机会话日志，不
 - **Ubuntu / Debian Linux**（20.04+）
 - **Node.js** >= 22.12.0
 - **Python** >= 3.10
-- 推荐使用 **pnpm@9**（Node ≥22.12；也可用 `npm install`）
+- 推荐使用 **npm**（Node ≥22.12；本机 corepack 正常时也可用 pnpm）
 
 ### 安装与启动
 
@@ -105,13 +105,13 @@ cognitally --export csv   # 导出细粒度每日模型消耗至 CSV
 
 ```bash
 # 安装依赖
-pnpm install
+npm install
 
 # 启动 Vite 开发服务器
-pnpm dev
+npm run dev
 
 # 另开一个终端，让 Electron 连接开发服务器
-pnpm start
+npm start
 ```
 
 ---

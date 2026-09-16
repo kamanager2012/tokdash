@@ -1,7 +1,6 @@
 {
   "name": "cognitally",
   "version": "0.1.0",
-  "packageManager": "pnpm@9.15.9",
   "description": "Sovereign AI Coding Agent Observability & Token Cost Ledger for Ubuntu/Linux",
   "author": "kamanager2012",
   "license": "MIT",
