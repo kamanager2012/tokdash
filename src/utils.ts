@@ -1,5 +1,5 @@
 /**
- * Shared utility functions for TokDash components.
+ * Shared utility functions for Cognitally components.
  */
 
 /** Format a raw token count to a human-readable string (K / M / B). */

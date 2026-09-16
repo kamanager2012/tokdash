@@ -22,7 +22,19 @@ cd "$DIR"
 # 3. 安装依赖（如果 node_modules 不存在）
 if [ ! -d "node_modules" ]; then
     echo "==> 正在安装前端与 Electron 依赖..."
-    pnpm install || npm install
+    if command -v pnpm >/dev/null 2>&1; then
+        pnpm install
+    elif command -v corepack >/dev/null 2>&1; then
+        corepack enable >/dev/null 2>&1 || true
+        corepack prepare pnpm@9.15.9 --activate >/dev/null 2>&1 || true
+        if command -v pnpm >/dev/null 2>&1; then
+            pnpm install
+        else
+            npm install
+        fi
+    else
+        npm install
+    fi
 fi
 
 echo "==> 正在构建前端界面..."

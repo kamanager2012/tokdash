@@ -76,7 +76,7 @@ function createWindow() {
     }
   });
 
-  const isDev = process.env.TOKDASH_DEV === '1' || process.env.NODE_ENV === 'development';
+  const isDev = process.env.COGNITALLY_DEV === '1' || process.env.TOKDASH_DEV === '1' || process.env.NODE_ENV === 'development';
   const distIndex = path.join(ROOT_DIR, 'dist', 'index.html');
 
   if (fs.existsSync(distIndex)) {

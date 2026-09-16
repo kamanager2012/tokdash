@@ -77,7 +77,7 @@ Cognitally passively inspects standard local session logs in read-only mode and 
 - **Ubuntu / Debian Linux** (20.04+)
 - **Node.js** >= 18.0.0
 - **Python** >= 3.10
-- **pnpm** recommended (or `npm`)
+- **pnpm@9** recommended (Node ≥20); `npm install` also works
 
 ### Installation & Launch
 
