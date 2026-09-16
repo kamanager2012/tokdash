@@ -47,7 +47,7 @@ Automatic seamless one-time migration is supported from legacy `~/.config/tokdas
 
 ## 🛠️ Supported AI Coding Agents
 
-TokDash passively inspects standard local session logs in read-only mode and does not act as an interception proxy.
+Cognitally passively inspects standard local session logs in read-only mode and does not act as an interception proxy.
 
 | Agent / Tool | Detection Target | Metrics Tracked |
 | :--- | :--- | :--- |
@@ -66,7 +66,7 @@ TokDash passively inspects standard local session logs in read-only mode and doe
 | **CodeBuddy / WorkBuddy** | `~/.codebuddy/` / `~/.workbuddy/` | Tencent coding assistant turns & token counts |
 | **Qoder** | `~/.qoder/` workspace & SQLite | Qoder IDE / Work / CLI multi-target tokens & metrics |
 
-> **Design Note**: TokDash explicitly focuses on these 14 first-class production AI coding agents, ensuring rock-solid ingestion pipelines and strict mathematical reconciliation. Peripheral niche tools are de-emphasized.
+> **Design Note**: Cognitally explicitly focuses on these 14 first-class production AI coding agents, ensuring rock-solid ingestion pipelines and strict mathematical reconciliation. Peripheral niche tools are de-emphasized.
 
 ---
 
@@ -83,8 +83,8 @@ TokDash passively inspects standard local session logs in read-only mode and doe
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/kamanager2012/cognitally.git
-cd cognitally
+git clone https://github.com/kamanager2012/tokdash.git
+cd tokdash
 
 # 2. Run the automated installer
 #    (installs dependencies, builds UI, and creates 'cognitally' CLI + desktop launcher)
