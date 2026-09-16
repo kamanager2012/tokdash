@@ -77,7 +77,7 @@ Cognitally 以只读方式被动解析各工具标准的本机会话日志，不
 - **Ubuntu / Debian Linux**（20.04+）
 - **Node.js** >= 18.0.0
 - **Python** >= 3.10
-- 推荐使用 **pnpm**（也可使用 `npm`）
+- 推荐使用 **pnpm@9**（Node ≥20；也可用 `npm install`）
 
 ### 安装与启动
 
