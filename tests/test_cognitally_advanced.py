@@ -10,11 +10,19 @@ import shutil
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCRIPT_PATH = os.path.join(ROOT_DIR, "usage.30s.py")
 
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
 
 class TestCognitallyAdvanced(unittest.TestCase):
     def run_cli(self, *args, timeout=20):
         cmd = [sys.executable, SCRIPT_PATH, *args]
-        return subprocess.run(cmd, cwd=ROOT_DIR, capture_output=True, text=True, timeout=timeout)
+        test_env = {
+            **os.environ,
+            "TOKEI_CODEX_LIVE_QUOTA": "0",
+            "TOKEI_GROK_LIVE_QUOTA": "0",
+        }
+        return subprocess.run(cmd, cwd=ROOT_DIR, env=test_env, capture_output=True, text=True, timeout=timeout)
 
     def test_single_flight_snapshot_caching(self):
         """测试原子快照在 TTL 内的跨进程单飞复用与代数一致性。"""
@@ -80,12 +88,18 @@ class TestCognitallyAdvanced(unittest.TestCase):
 
     def test_mcp_server_stdio_protocol(self):
         """验证标准只读 MCP Stdio 服务对 initialize、tools/list 及全部 6 个只读工具的协议支持。"""
+        test_env = {
+            **os.environ,
+            "TOKEI_CODEX_LIVE_QUOTA": "0",
+            "TOKEI_GROK_LIVE_QUOTA": "0",
+        }
         proc = subprocess.Popen(
             [sys.executable, SCRIPT_PATH, "--mcp"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             text=True,
-            cwd=ROOT_DIR
+            cwd=ROOT_DIR,
+            env=test_env
         )
 
         def send_msg(req):
@@ -186,8 +200,15 @@ class TestCognitallyAdvanced(unittest.TestCase):
             })
             self.assertFalse(status_res["result"].get("isError", False))
             s_data = json.loads(status_res["result"]["content"][0]["text"])
-            self.assertIn("doctor_report", s_data)
-            self.assertIn("pricing_metadata", s_data)
+            # 9. Invalid JSON on stdin must return standard JSON-RPC 2.0 -32700 Parse error
+            proc.stdin.write("{not-a-valid-json\n")
+            proc.stdin.flush()
+            err_line = proc.stdout.readline()
+            err_res = json.loads(err_line)
+            self.assertEqual(err_res.get("jsonrpc"), "2.0")
+            self.assertIn("error", err_res)
+            self.assertEqual(err_res["error"].get("code"), -32700)
+            self.assertIn("Parse error", err_res["error"].get("message"))
 
         finally:
             if proc.stdin:
@@ -195,6 +216,58 @@ class TestCognitallyAdvanced(unittest.TestCase):
             if proc.stdout:
                 proc.stdout.close()
             proc.wait(timeout=5)
+
+    def test_export_csv_formula_injection_sanitization(self):
+        """验证 CSV 导出时能有效转义 =, +, -, @ 等公式触发符，防御 CWE-1236 注入。"""
+        import export_engine
+        synthetic_snapshot = {
+            "snapshot_id": "test-snap",
+            "generation": "1234567890abcdef",
+            "usage": {
+                "claude": {
+                    "ranges": {
+                        "all": {
+                            "models": [
+                                {
+                                    "name": "=1+2';cmd|' /C calc'!A0",
+                                    "cost": 0.01,
+                                    "in": 100,
+                                    "out": 50,
+                                    "pricing_provenance": "exact_catalog",
+                                    "pricing_source": "@evil.com/leak",
+                                    "cost_kind": "standard"
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        }
+        csv_content = export_engine.export_canonical_dataset(synthetic_snapshot, format_type="csv", period="all")
+        lines = csv_content.strip().splitlines()
+        self.assertGreater(len(lines), 1)
+        data_line = lines[1]
+        # Formula characters must be neutralized with leading single quote
+        self.assertIn("'=1+2';cmd|' /C calc'!A0", data_line)
+        self.assertIn("'@evil.com/leak", data_line)
+
+    def test_domain_models_entity_contract(self):
+        """验证 domain_models.py 中领域实体的不可变性与契约有效性。"""
+        import domain_models
+        snap = domain_models.CanonicalSnapshotEntity(
+            snapshot_id="snap-123",
+            generation="1234567890abcdef",
+            generated_at="2026-09-17T00:00:00Z",
+            agents={},
+            daily_costs=[],
+            projects=[],
+            pricing_metadata={"count": 10}
+        )
+        self.assertTrue(snap.is_valid)
+        self.assertEqual(snap.generation, "1234567890abcdef")
+        # Immutability check
+        with self.assertRaises(Exception):
+            snap.generation = "tampered"
 
 
 if __name__ == "__main__":

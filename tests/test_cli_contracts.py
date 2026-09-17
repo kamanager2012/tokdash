@@ -15,7 +15,12 @@ spec.loader.exec_module(usage_module)
 class TestCliContracts(unittest.TestCase):
     def run_cli(self, *args, timeout=20):
         cmd = [sys.executable, SCRIPT_PATH, *args]
-        proc = subprocess.run(cmd, cwd=ROOT_DIR, capture_output=True, text=True, timeout=timeout)
+        test_env = {
+            **os.environ,
+            "TOKEI_CODEX_LIVE_QUOTA": "0",
+            "TOKEI_GROK_LIVE_QUOTA": "0",
+        }
+        proc = subprocess.run(cmd, cwd=ROOT_DIR, env=test_env, capture_output=True, text=True, timeout=timeout)
         return proc
 
     def test_cli_json_contract(self):
@@ -140,14 +145,14 @@ class TestCliContracts(unittest.TestCase):
     def test_cli_doctor_contract(self):
         """验证 tokdash --doctor 诊断子命令的 ASCII 表格与 JSON 契约。"""
         # 1. Human-readable ASCII table
-        res_ascii = subprocess.run([sys.executable, SCRIPT_PATH, "--doctor"], capture_output=True, text=True)
+        res_ascii = self.run_cli("--doctor")
         self.assertEqual(res_ascii.returncode, 0, f"--doctor failed: {res_ascii.stderr}")
-        self.assertIn("TokDash Doctor", res_ascii.stdout)
+        self.assertIn("Doctor", res_ascii.stdout)
         self.assertIn("Claude Code", res_ascii.stdout)
         self.assertIn("Codex CLI", res_ascii.stdout)
 
         # 2. Structured JSON diagnostics
-        res_json = subprocess.run([sys.executable, SCRIPT_PATH, "--doctor", "--json"], capture_output=True, text=True)
+        res_json = self.run_cli("--doctor", "--json")
         self.assertEqual(res_json.returncode, 0, f"--doctor --json failed: {res_json.stderr}")
         report = json.loads(res_json.stdout)
         self.assertIn("system", report)

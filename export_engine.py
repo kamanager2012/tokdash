@@ -13,6 +13,15 @@ from datetime import datetime
 from typing import Optional, Dict, Any
 
 
+def _sanitize_csv_cell(val: Any) -> Any:
+    """Sanitize CSV cell value to prevent Formula Injection (CWE-1236)."""
+    if isinstance(val, str):
+        val_strip = val.strip()
+        if val_strip and val_strip[0] in ("=", "+", "-", "@", "\t", "\r"):
+            return f"'{val}"
+    return val
+
+
 def export_canonical_dataset(
     snapshot: Dict[str, Any],
     format_type: str = "json",
@@ -73,7 +82,7 @@ def export_canonical_dataset(
                     gen,
                     agent_key,
                     period,
-                    m.get("name") or m.get("model_id", "unknown"),
+                    _sanitize_csv_cell(m.get("name") or m.get("model_id", "unknown")),
                     m.get("in", 0),
                     m.get("out", 0),
                     m.get("cr", 0),
@@ -81,13 +90,21 @@ def export_canonical_dataset(
                     m.get("reason", 0),
                     f"{m.get('cost', 0.0):.6f}",
                     m.get("pricing_provenance", "unknown"),
-                    m.get("pricing_source", ""),
+                    _sanitize_csv_cell(m.get("pricing_source", "")),
                     m.get("cost_kind", "standard")
                 ])
         content = buffer.getvalue()
 
     if out_path:
+        out_path = os.path.abspath(out_path)
+        parent_dir = os.path.dirname(out_path)
+        if parent_dir and not os.path.exists(parent_dir):
+            os.makedirs(parent_dir, mode=0o700, exist_ok=True)
         with open(out_path, "w", encoding="utf-8") as f:
             f.write(content)
+        try:
+            os.chmod(out_path, 0o600)
+        except OSError:
+            pass
 
     return content

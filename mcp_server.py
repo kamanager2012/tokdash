@@ -379,6 +379,16 @@ def serve_stdio():
             req = json.loads(line)
         except Exception as e:
             sys.stderr.write(f"Invalid JSON input: {e}\n")
+            parse_err = {
+                "jsonrpc": "2.0",
+                "id": None,
+                "error": {
+                    "code": -32700,
+                    "message": f"Parse error: {str(e)}"
+                }
+            }
+            sys.stdout.write(json.dumps(parse_err, ensure_ascii=False) + "\n")
+            sys.stdout.flush()
             continue
             
         resp = process_jsonrpc_message(req)

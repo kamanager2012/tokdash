@@ -32,14 +32,15 @@ echo "==> 正在构建前端界面..."
 chmod +x "$DIR/start.sh"
 BIN_DIR="$HOME/.local/bin"
 mkdir -p "$BIN_DIR"
-cat << 'CLI_EOF' > "$BIN_DIR/cognitally"
+cat << CLI_EOF > "$BIN_DIR/cognitally"
 #!/usr/bin/env bash
-DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && cd ../.. && pwd)"
-# If running inside repo directly
-if [ -f "/home/jamesoldman/tokdash/usage.30s.py" ]; then
-    python3 /home/jamesoldman/tokdash/usage.30s.py "$@"
+# Canonical Cognitally CLI launcher
+REPO_DIR="$DIR"
+if [ -f "\$REPO_DIR/usage.30s.py" ]; then
+    exec python3 "\$REPO_DIR/usage.30s.py" "\$@"
 else
-    python3 "$DIR/usage.30s.py" "$@"
+    echo "Error: Cognitally core script not found at \$REPO_DIR/usage.30s.py" >&2
+    exit 1
 fi
 CLI_EOF
 chmod +x "$BIN_DIR/cognitally"
