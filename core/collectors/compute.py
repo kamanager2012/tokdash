@@ -70,19 +70,19 @@ from core.collectors.qoder import (
     scan_qoder,
     scan_qoder_ide,
     scan_qodercli,
-    scan_hermes,
 )
-from core.collectors.misc import (
-    scan_pi,
+from core.collectors.hermes import scan_hermes
+from core.collectors.pi import scan_pi
+from core.collectors.codebuddy import (
     scan_workbuddy,
     scan_workbuddy_ai,
     scan_codebuddy,
-    scan_grok_bot,
-    scan_deepseek_harness,
-    scan_opencode,
-    scan_zcode,
-    scan_kimicode,
 )
+from core.collectors.grok_bot import scan_grok_bot
+from core.collectors.deepseek import scan_deepseek_harness
+from core.collectors.opencode import scan_opencode
+from core.collectors.glm import scan_zcode
+from core.collectors.kimicode import scan_kimicode
 
 def compute(return_cache=False):
     bounds = range_bounds()
