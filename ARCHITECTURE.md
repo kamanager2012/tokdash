@@ -51,7 +51,7 @@ A structural comparison with peer projects (such as `vamshivittali76/Tokie`):
 | **Desktop Experience**| Linux Electron frameless UI + native Tray + workspace repo/ports tracking | Browser localhost Dashboard + TUI | **TokDash Native Linux Advantage** |
 | **Domain Model** | Transitioning from monolithic scanner dicts to unified domain entities | Unified `UsageEvent` + `Subscription` | **TokDash Adopting Domain Model** |
 | **Diagnostics** | Native `tokdash doctor` CLI & JSON inspection | `tokie doctor` | **Implemented in TokDash** |
-| **Agent Interface** | Read-Only MCP Planned (pure query, zero hallucinated routing) | Read-Only MCP with static YAML routing table | **Adopting Read-Only Interface** |
+| **Agent Interface** | Native Read-Only Stdio MCP Server (`tokdash --mcp` / `mcp_server.py`, 6 tools) | Read-Only MCP with static YAML routing table | **Implemented in TokDash** |
 
 ---
 

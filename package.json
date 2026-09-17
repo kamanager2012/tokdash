@@ -7,12 +7,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/kamanager2012/cognitally.git"
+    "url": "https://github.com/kamanager2012/tokdash.git"
   },
   "bugs": {
-    "url": "https://github.com/kamanager2012/cognitally/issues"
+    "url": "https://github.com/kamanager2012/tokdash/issues"
   },
-  "homepage": "https://github.com/kamanager2012/cognitally#readme",
+  "homepage": "https://github.com/kamanager2012/tokdash#readme",
   "keywords": [
     "ai",
     "tokens",
