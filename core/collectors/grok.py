@@ -33,6 +33,8 @@ from core.storage import (
 )
 from core.collectors.claude import _iso_to_epoch
 from core.collectors.codex import _codex_complete_offset, _codex_offset_guard
+from core.collectors.quotas import _tokei_config
+
 
 # 会话目录提供项目、模型和运行指标；新版 unified.jsonl 额外记录逐次推理 token。
 # 旧版 inference_done 没有 token 字段，只用于上下文快照，不能计入总用量。
@@ -305,9 +307,7 @@ _GROK_BILLING_MSG = "billing: fetched credits config"
 _GROK_LIVE_BILLING_URL = "https://cli-chat-proxy.grok.com/v1/billing?format=credits"
 
 
-def _tokei_config():
-    cfg = _load_json(os.path.join(_USER_DIR, "config.json"), {})
-    return cfg if isinstance(cfg, dict) else {}
+# _tokei_config imported from core.collectors.quotas
 
 
 def _grok_live_quota_enabled():

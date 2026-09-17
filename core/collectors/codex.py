@@ -22,6 +22,7 @@ except ImportError:
         tomllib = None
 
 from core.config import (
+    _atomic_write_json,
     CODEX_DIR,
     CODEX_ARCHIVED_DIR,
     CODEX_AUTH,
@@ -34,7 +35,6 @@ from core.config import (
     classify_date,
     parse_ts,
     _load_json,
-    _atomic_write_json,
     _path_candidates,
     _existing_dirs,
 )
@@ -69,20 +69,7 @@ _CODEX_RESET_CARDS_RETRY_INTERVAL = 6 * 3600
 _CODEX_RESET_CARDS_MAX_RESPONSE_BYTES = 256 * 1024
 
 
-def _atomic_write_json(path, data):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    import tempfile
-    fd, tmp = tempfile.mkstemp(prefix=".tmp-", suffix=".json", dir=os.path.dirname(path))
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, separators=(",", ":"))
-        os.replace(tmp, path)
-    except Exception:
-        try:
-            os.remove(tmp)
-        except OSError:
-            pass
-        raise
+# _atomic_write_json imported from core.config
 
 
 def _window_from_codex_live(window):
@@ -504,8 +491,7 @@ def _codex_event_key(event):
     return tuple(event[2:10])
 
 
-def _codex_event_cache_dir():
-    return f"{_SCAN_CACHE_FILE}{_CODEX_EVENT_CACHE_SUFFIX}"
+# _codex_event_cache_dir imported from core.storage
 
 
 def _codex_event_cache_path(file_path):
