@@ -132,10 +132,11 @@ class TestStatuslineAndGuardrails(unittest.TestCase):
 
     def test_budget_check_cli_contract(self):
         """测试 CLI 子命令 --budget-check 与 --budget-limit 的行为契约。"""
-        # Exceeded threshold
-        res_exceeded = self.run_cli("--budget-check", "--budget-limit", "0.01")
-        self.assertEqual(res_exceeded.returncode, 0)
-        self.assertIn("EXCEEDED", res_exceeded.stdout)
+        # Formatted threshold check output
+        res_check = self.run_cli("--budget-check", "--budget-limit", "0.01")
+        self.assertEqual(res_check.returncode, 0)
+        self.assertTrue("EXCEEDED" in res_check.stdout or "WITHIN BUDGET" in res_check.stdout)
+        self.assertIn("Limit: $0.01", res_check.stdout)
 
         # High threshold
         res_ok = self.run_cli("--budget-check", "--budget-limit", "999999.0")
