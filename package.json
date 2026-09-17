@@ -43,7 +43,9 @@
     "app": "vite build && electron electron/main.cjs",
     "doctor": "python3 usage.30s.py --doctor",
     "mcp": "python3 usage.30s.py --mcp",
-    "export": "python3 usage.30s.py --export"
+    "export": "python3 usage.30s.py --export",
+    "statusline": "python3 usage.30s.py --statusline",
+    "budget-check": "python3 usage.30s.py --budget-check"
   },
   "dependencies": {
     "clsx": "^2.1.1",

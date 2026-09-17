@@ -11235,6 +11235,40 @@ if __name__ == "__main__":
             sys.stdout.write(content)
             if not content.endswith("\n"):
                 sys.stdout.write("\n")
+    elif "--statusline" in sys.argv or "--status-line" in sys.argv:
+        from statusline_engine import render_statusline
+        fmt = "default"
+        for i, a in enumerate(sys.argv):
+            if a in ("--format", "-f") and i + 1 < len(sys.argv):
+                fmt = sys.argv[i + 1]
+        if "--json" in sys.argv:
+            fmt = "json"
+        snap = get_canonical_snapshot(force="--force" in sys.argv)
+        line = render_statusline(snap, period=_arg_period(default="today"), format_type=fmt)
+        print(line)
+    elif "--budget-check" in sys.argv:
+        from budget_guard import check_budget
+        threshold = None
+        for i, a in enumerate(sys.argv):
+            if a == "--budget-limit" and i + 1 < len(sys.argv):
+                try:
+                    threshold = float(sys.argv[i + 1])
+                except ValueError:
+                    pass
+        snap = get_canonical_snapshot(force="--force" in sys.argv)
+        report = check_budget(
+            snap,
+            period=_arg_period(default="today"),
+            threshold_usd=threshold,
+            send_notification="--notify" in sys.argv
+        )
+        if "--json" in sys.argv:
+            import json
+            print(json.dumps(report, indent=2, ensure_ascii=False))
+        else:
+            status_tag = "🚨 EXCEEDED" if report["exceeded"] else "✅ WITHIN BUDGET"
+            limit_str = f"${report['threshold_usd']:.2f}" if report['threshold_usd'] is not None else "Not set"
+            print(f"[{status_tag}] {report['period']} cost: ${report['current_cost_usd']:.2f} | Limit: {limit_str}")
     elif "--update-prices" in sys.argv:
         sys.exit(update_prices())
     elif "--update-unknown" in sys.argv:
