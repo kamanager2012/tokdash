@@ -50,7 +50,7 @@ def _resolve_snapshot_generator():
     raise RuntimeError("No snapshot generator registered and could not resolve compute/accounting functions.")
 
 
-def get_canonical_snapshot(ttl=5.0, force=False, generator=None):
+def get_canonical_snapshot(ttl=_SNAPSHOT_TTL, force=False, generator=None):
     """原子一致性快照(带跨进程单飞防护): 仅执行单次 compute(), 在单一内存世代内派生 usage, daily_costs 和 projects。
     
     多进程(如 MCP Server, Electron UI, 命令行)同时请求时，仅有一个进程计算，其余等待并直接复用新鲜快照，彻底杜绝内存风暴与重叠计算。

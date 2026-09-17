@@ -252,7 +252,8 @@ _GROK_BOT_PROVIDER_DAYS_CACHE_KEY = "_grok_bot_provider_days"
 
 _SNAPSHOT_CACHE_FILE = os.path.join(_SCAN_CACHE_DIR, "canonical_snapshot.json")
 _SNAPSHOT_LOCK_FILE = os.path.join(_SCAN_CACHE_DIR, "canonical_snapshot.lock")
-_SNAPSHOT_TTL = 5.0
+_SNAPSHOT_TTL = 25.0
+
 
 
 def _migrate_legacy_cognitally_state():

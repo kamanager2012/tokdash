@@ -379,29 +379,39 @@ def scan_gemini(bounds, cache):
             sessions[sid] = (score, entry)
 
     days = {}
+    _price_cache = {}  # model → gemini_price() result; 8 unique models vs 21K events
+    _date_cache = {}   # timestamp str → (dt.date().isoformat(), dt.hour)
     for sid, (_, entry) in sessions.items():
         for event in entry.get("events", []):
-            dt = parse_ts(event.get("timestamp", ""))
-            if dt is None:
-                continue
-            dt = dt.astimezone()
+            ts = event.get("timestamp", "")
+            date_info = _date_cache.get(ts)
+            if date_info is None:
+                dt = parse_ts(ts)
+                if dt is None:
+                    continue
+                dt = dt.astimezone()
+                date_info = (dt.date().isoformat(), dt.hour)
+                _date_cache[ts] = date_info
+            day_key, hour = date_info
             tokens = event.get("tokens") or {}
             model = event.get("model") or "unknown"
             inp = int(tokens.get("input", 0) or 0)
             out = int(tokens.get("output", 0) or 0)
             cached = int(tokens.get("cached", 0) or 0)
             thoughts = int(tokens.get("thoughts", 0) or 0)
-            price = gemini_price(model)
+            price = _price_cache.get(model)
+            if price is None:
+                price = gemini_price(model)
+                _price_cache[model] = price
             cost = (max(inp - cached, 0) / 1e6 * price["in"]
                     + cached / 1e6 * price["cache_read"]
                     + (out + thoughts) / 1e6 * price["out"])
-            day_key = dt.date().isoformat()
             day = days.setdefault(
                 day_key, {"in": 0, "out": 0, "cached": 0, "thoughts": 0,
                           "cost": 0.0, "models": {}, "sessions": set(), "hours": [0] * 24})
             day["in"] += inp; day["out"] += out; day["cached"] += cached
             day["thoughts"] += thoughts; day["cost"] += cost; day["sessions"].add(sid)
-            day["hours"][dt.hour] += inp + out + thoughts
+            day["hours"][hour] += inp + out + thoughts
             model_usage = day["models"].setdefault(
                 model, {"in": 0, "out": 0, "cached": 0, "thoughts": 0, "cost": 0.0})
             model_usage["in"] += inp; model_usage["out"] += out
