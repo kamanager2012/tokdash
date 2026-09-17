@@ -28,6 +28,11 @@
 
 import os
 import sys
+
+_REPO_ROOT = os.path.dirname(os.path.abspath(__file__))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
 import glob
 import hashlib
 import json
@@ -36,628 +41,148 @@ import re
 import sqlite3
 import subprocess
 import threading
+import tempfile as _tempfile
+import time as _time
 from datetime import datetime, timedelta, date, timezone
 from pathlib import Path
 
-HOME = os.path.expanduser("~")
-APPDATA = os.environ.get("APPDATA") or os.path.join(HOME, "AppData", "Roaming")
-LOCALAPPDATA = os.environ.get("LOCALAPPDATA") or os.path.join(HOME, "AppData", "Local")
-
-
-def _expand_path(path):
-    if not path:
-        return None
-    value = os.fspath(path).strip()
-    return os.path.abspath(os.path.expandvars(os.path.expanduser(value))) if value else None
-
-
-def _path_candidates(env_name, *defaults):
-    values = []
-    configured = os.environ.get(env_name, "")
-    if configured:
-        values.extend(configured.split(os.pathsep))
-    values.extend(defaults)
-    result = []
-    seen = set()
-    for value in values:
-        path = _expand_path(value)
-        if not path:
-            continue
-        key = os.path.normcase(os.path.realpath(path))
-        if key not in seen:
-            seen.add(key)
-            result.append(path)
-    return result
-
-
-def _first_existing_file(paths):
-    return next((path for path in paths if os.path.isfile(path)), None)
-
-
-def _existing_dirs(paths):
-    result = []
-    seen = set()
-    for path in paths:
-        if not os.path.isdir(path):
-            continue
-        real = os.path.realpath(path)
-        key = os.path.normcase(real)
-        if key not in seen:
-            seen.add(key)
-            result.append(real)
-    return result
-
-
-CLAUDE_DIR = os.path.join(HOME, ".claude", "projects")
-CODEX_DIR = os.path.join(HOME, ".codex", "sessions")
-CODEX_ARCHIVED_DIR = os.path.join(HOME, ".codex", "archived_sessions")
-CODEX_AUTH = os.path.join(HOME, ".codex", "auth.json")
-CODEX_CONFIG = os.path.join(HOME, ".codex", "config.toml")
-GEMINI_DIR = os.path.join(HOME, ".gemini", "tmp")
-ANTIGRAVITY_DIR = os.path.join(HOME, ".gemini", "antigravity-cli", "conversations")
-GEMINI_DIRS = _path_candidates(
-    "TOKEI_GEMINI_DIR", GEMINI_DIR,
+# ---------- Core Architecture Imports & Re-exports ----------
+from core.config import (
+    HOME,
+    APPDATA,
+    LOCALAPPDATA,
+    BASE_DIR,
+    _CONFIG_BASE,
+    _COGNITALLY_DIR,
+    _LEGACY_TOKDASH_DIR,
+    _LEGACY_TOKEI_DIR,
+    _USER_DIR,
+    _SCAN_CACHE_DIR,
+    _DEFAULT_SCAN_CACHE_FILE,
+    _SCAN_CACHE_FILE,
+    _LEGACY_SCAN_CACHE_FILE,
+    _PREV_TOKEI_CACHE_FILE,
+    _SNAPSHOT_CACHE_FILE,
+    _SNAPSHOT_LOCK_FILE,
+    _SNAPSHOT_TTL,
+    _expand_path,
+    _path_candidates,
+    _first_existing_file,
+    _existing_dirs,
+    _writable_path,
+    _load_json,
+    _atomic_write_json,
+    _migrate_legacy_cognitally_state,
+    # Agent directories & configs
+    CLAUDE_DIR,
+    CODEX_DIR,
+    CODEX_ARCHIVED_DIR,
+    CODEX_AUTH,
+    CODEX_CONFIG,
+    GEMINI_DIR,
     ANTIGRAVITY_DIR,
-    os.path.join(HOME, ".gemini", "antigravity", "conversations"),
-    os.path.join(HOME, ".gemini", "antigravity-ide", "conversations"),
-    os.path.join(HOME, ".gemini", "gemini-cli", "conversations"),
-    *([os.environ["TOKEI_ANTIGRAVITY_DIR"]] if "TOKEI_ANTIGRAVITY_DIR" in os.environ else []))
-GROK_HOME = os.path.abspath(os.path.expanduser(
-    os.environ.get("GROK_HOME", os.path.join(HOME, ".grok"))))
-GROK_DIR = os.path.join(GROK_HOME, "sessions")
-GROK_LOG = os.path.join(GROK_HOME, "logs", "unified.jsonl")
-GROK_AUTH = os.path.join(GROK_HOME, "auth.json")
-WORKBUDDY_DIR = os.path.join(HOME, ".workbuddy", "projects")
-WORKBUDDY_AI_DIR = os.path.join(HOME, ".workbuddy-ai", "projects")
-CODEBUDDY_DIR = os.path.join(HOME, ".codebuddy", "projects")
-GROK_BOT_DIRS = _path_candidates(
-    "TOKEI_GROK_BOT_DIR",
-    os.path.join(HOME, "Library", "Application Support", "Grok Bot",
-                 "sand-client-persistence"),
-    os.path.join(APPDATA, "Grok Bot", "sand-client-persistence"),
-    os.path.join(HOME, ".config", "Grok Bot", "sand-client-persistence"))
-GROK_BOT_SECRET_PATHS = _path_candidates(
-    "TOKEI_GROK_BOT_SECRETS",
-    os.path.join(HOME, "Library", "Application Support", "Grok Bot",
-                 "sand-secrets.json"),
-    os.path.join(APPDATA, "Grok Bot", "sand-secrets.json"),
-    os.path.join(HOME, ".config", "Grok Bot", "sand-secrets.json"))
-GROK_BOT_AUTH_MARKER = _expand_path(os.environ.get(
-    "TOKEI_GROK_BOT_AUTH_MARKER",
-    os.path.join(HOME, ".tokei", "grok_bot_keychain_authorized")))
-DEEPSEEK_HARNESS_DIR = os.path.abspath(os.path.expanduser(os.environ.get(
-    "TOKEI_DSH_DECOMPRESSED_DIR", os.path.join(HOME, ".tokei", "cache", "dsh-sessions"))))
-QODER_IDE_DB = os.path.join(HOME, "Library", "Application Support", "Qoder",
-                            "SharedClientCache", "cache", "db", "local.db")
-QODER_IDE_DB_PATHS = _path_candidates(
-    "TOKEI_QODER_IDE_DB", QODER_IDE_DB,
-    os.path.join(HOME, ".config", "Qoder", "SharedClientCache", "cache", "db", "local.db"),
-    os.path.join(APPDATA, "Qoder", "SharedClientCache", "cache", "db", "local.db"),
-    os.path.join(LOCALAPPDATA, "Qoder", "SharedClientCache", "cache", "db", "local.db"))
-
-
-def _qoder_ide_db_path():
-    return _first_existing_file(
-        _path_candidates("TOKEI_QODER_IDE_DB", QODER_IDE_DB, *QODER_IDE_DB_PATHS))
-
-
-HERMES_DB = os.path.join(HOME, ".hermes", "state.db")
-OPENCODE_DATA_DIR = os.path.expanduser(os.environ.get(
-    "OPENCODE_DATA_DIR", os.path.join(HOME, ".local", "share", "opencode")))
-OPENCODE_DIR = os.path.join(OPENCODE_DATA_DIR, "storage", "message")
-OPENCODE_DB = os.path.join(OPENCODE_DATA_DIR, "opencode.db")
-OPENCODE_DATA_DIRS = _path_candidates(
-    "TOKEI_OPENCODE_DATA_DIR", OPENCODE_DATA_DIR,
-    os.path.join(APPDATA, "opencode"), os.path.join(LOCALAPPDATA, "opencode"))
-ZCODE_DB = os.path.abspath(os.path.expanduser(os.environ.get(
-    "TOKEI_ZCODE_DB", os.path.join(HOME, ".zcode", "cli", "db", "db.sqlite"))))
-PI_AGENT_DIR = os.path.expanduser(os.environ.get("PI_CODING_AGENT_DIR", os.path.join(HOME, ".pi", "agent")))
-PI_SESSION_DIR = os.path.expanduser(os.environ.get("PI_CODING_AGENT_SESSION_DIR", os.path.join(PI_AGENT_DIR, "sessions")))
-OMP_SESSION_DIR = os.path.expanduser(os.environ.get(
-    "OMP_CODING_AGENT_SESSION_DIR", os.path.join(HOME, ".omp", "agent", "sessions")))
-_KIMI_CODE_DEFAULT_DIR = os.path.join(HOME, ".kimi-code")
-_KIMI_CODE_LEGACY_DIR = os.path.join(HOME, ".kimi")
-KIMI_CODE_DIR = os.path.abspath(os.path.expanduser(
-    os.environ.get("TOKEI_KIMI_DIR") or os.environ.get("KIMI_CODE_HOME")
-    or os.environ.get("KIMI_SHARE_DIR") or _KIMI_CODE_DEFAULT_DIR))
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-_CONFIG_BASE = os.environ.get("XDG_CONFIG_HOME", os.path.join(HOME, ".config"))
-_COGNITALLY_DIR = os.path.join(_CONFIG_BASE, "cognitally")
-_LEGACY_TOKDASH_DIR = os.path.join(_CONFIG_BASE, "tokdash")
-_LEGACY_TOKEI_DIR = os.path.join(HOME, ".tokei")
-
-_USER_DIR = (
-    os.environ.get("COGNITALLY_DIR")
-    or os.environ.get("TOKDASH_DIR")
-    or os.environ.get("TOKEI_DIR")
-    or _COGNITALLY_DIR
+    GEMINI_DIRS,
+    GROK_HOME,
+    GROK_DIR,
+    GROK_LOG,
+    GROK_AUTH,
+    WORKBUDDY_DIR,
+    WORKBUDDY_AI_DIR,
+    CODEBUDDY_DIR,
+    GROK_BOT_DIRS,
+    GROK_BOT_SECRET_PATHS,
+    GROK_BOT_AUTH_MARKER,
+    DEEPSEEK_HARNESS_DIR,
+    QODER_IDE_DB,
+    QODER_IDE_DB_PATHS,
+    _qoder_ide_db_path,
+    HERMES_DB,
+    OPENCODE_DATA_DIR,
+    OPENCODE_DIR,
+    OPENCODE_DB,
+    OPENCODE_DATA_DIRS,
+    ZCODE_DB,
+    PI_AGENT_DIR,
+    PI_SESSION_DIR,
+    OMP_SESSION_DIR,
+    _KIMI_CODE_DEFAULT_DIR,
+    _KIMI_CODE_LEGACY_DIR,
+    KIMI_CODE_DIR,
+    # Caches
+    PRICING_FILE,
+    OVERRIDES_FILE,
+    CODEX_QUOTA_CACHE,
+    CODEX_RESET_CARDS_CACHE,
+    CLAUDE_QUOTA_CACHE,
+    GROK_QUOTA_CACHE,
+    PROVIDER_QUOTA_CACHE,
+    ANTIGRAVITY_SCAN_CACHE,
+    # Ranges & tokens
+    RANGE_KEYS,
+    TOKEN_FIELDS,
+    _LEDGER_TOKEN_FIELDS,
+    range_bounds,
+    range_boundaries,
+    classify,
+    classify_date,
+    parse_ts,
+    human,
+    token_total,
+    _sqlite_ro_uri,
+    _sqlite_signature,
+    # Empty bucket templates
+    _empty_token_bucket,
+    _empty_token_day,
+    _empty_token_ranges,
+    _empty_claude,
+    _empty_codex,
+    _empty_gemini,
+    _empty_grok,
+    _empty_qoder,
+    _empty_hermes,
+    _empty_opencode,
+    _empty_pi,
+    _empty_workbuddy,
+    _empty_grok_bot,
+    _empty_deepseek_harness,
+    _empty_kimicode,
+    _empty_zcode,
 )
 
-def _writable_path(name):
-    """优先用 ~/.config/cognitally/ 下的可写副本, 兼容 legacy ~/.config/tokdash 与 ~/.tokei, 没有则用脚本同目录(开发模式)。"""
-    user = os.path.join(_USER_DIR, name)
-    if os.path.isfile(user):
-        return user
-    legacy_td = os.path.join(_LEGACY_TOKDASH_DIR, name)
-    if os.path.isfile(legacy_td):
-        return legacy_td
-    legacy_tk = os.path.join(_LEGACY_TOKEI_DIR, name)
-    if os.path.isfile(legacy_tk):
-        return legacy_tk
-    base = os.path.join(BASE_DIR, name)
-    if os.path.isfile(base):
-        if ".app/" in BASE_DIR:
-            os.makedirs(_USER_DIR, exist_ok=True)
-            import shutil; shutil.copy2(base, user)
-            return user
-        return base
-    return os.path.join(_USER_DIR, name)
-
-PRICING_FILE = _writable_path("pricing.json")
-OVERRIDES_FILE = _writable_path("pricing_overrides.json")
-CODEX_QUOTA_CACHE = _writable_path("codex_quota_cache.json")
-CODEX_RESET_CARDS_CACHE = _writable_path("codex_reset_cards_cache.json")
-CLAUDE_QUOTA_CACHE = _writable_path("claude_quota_cache.json")
-GROK_QUOTA_CACHE = _writable_path("grok_quota_cache.json")
-PROVIDER_QUOTA_CACHE = _writable_path("provider_quota_cache.json")
-ANTIGRAVITY_SCAN_CACHE = _writable_path("antigravity_scan_cache.json")
-
-# 每 1M token 美元单价。基准价来自 OpenRouter,外置在 pricing.json(由 --update-prices 同步);
-# pricing_overrides.json 做本地修正(write1h / 别名 / 缺漏),一键更新不覆盖它。
-# write5m / write1h = 5 分钟 / 1 小时 缓存写入价(OpenRouter 只给一档 cache_write=5m,
-# Anthropic 的 1h 写派生为 2×输入价)。
-
-# 内置兜底:pricing.json 缺失时仍能离线工作(口径与 OpenRouter 一致)。
-_DEFAULT_PRICES = {
-    "anthropic/claude-opus-4.8":     {"in": 5.0,   "out": 25.0, "cache_read": 0.5,    "cache_write": 6.25},
-    "anthropic/claude-sonnet-4.6":   {"in": 3.0,   "out": 15.0, "cache_read": 0.3,    "cache_write": 3.75},
-    "anthropic/claude-haiku-4.5":    {"in": 1.0,   "out": 5.0,  "cache_read": 0.1,    "cache_write": 1.25},
-    "openai/gpt-5.5":                {"in": 5.0,   "out": 30.0, "cache_read": 0.5,    "cache_write": 0.0},
-    "qwen/qwen3.7-max":              {"in": 1.25,  "out": 3.75, "cache_read": 0.25,   "cache_write": 1.5625},
-    "deepseek/deepseek-v4-pro":      {"in": 0.435, "out": 0.87, "cache_read": 0.0036, "cache_write": 0.0},
-    "google/gemini-3.5-flash":       {"in": 1.5,   "out": 9.0,  "cache_read": 0.15,   "cache_write": 0.0833},
-    "google/gemini-3.1-pro-preview": {"in": 2.0,   "out": 12.0, "cache_read": 0.2,    "cache_write": 0.375},
-    "x-ai/grok-4.5":                 {"in": 2.0,   "out": 6.0,  "cache_read": 0.3,    "cache_write": 0.0},
-    "tencent/hy3":                   {"in": 0.14,  "out": 0.58, "cache_read": 0.035,  "cache_write": 0.0},
-    "tencent/hy3-preview":           {"in": 0.063, "out": 0.21, "cache_read": 0.021,  "cache_write": 0.0},
-}
-
-# DeepSeek Harness 的 deepseek-official 路由按官方直连价计算，不能套用
-# OpenRouter 同名模型的渠道价。单位均为 USD / 1M tokens。
-_DEEPSEEK_OFFICIAL_PRICES = {
-    "deepseek-v4-pro": {
-        "in": 0.435, "out": 0.87, "cache_read": 0.003625, "cache_write": 0.0,
-    },
-    "deepseek-v4-flash": {
-        "in": 0.14, "out": 0.28, "cache_read": 0.0028, "cache_write": 0.0,
-    },
-}
-
-
-def _deepseek_official_price(model):
-    normalized = _normalize(model) or ""
-    model_id = normalized.rsplit("/", 1)[-1]
-    price = _DEEPSEEK_OFFICIAL_PRICES.get(model_id)
-    return dict(price) if price else None
-
-
-def _load_json(path, default):
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return default
-
-
-_PRICING_DB = _load_json(PRICING_FILE, {}).get("models", {})
-_OVERRIDES = _load_json(OVERRIDES_FILE, {})
-_OV_MODELS = _OVERRIDES.get("models", {})
-_OV_ALIASES = _OVERRIDES.get("aliases", {})
-
-# 家族关键字 → 代表性 canonical id(精确匹配失败时回退)。
-_FAMILY = [
-    ("opus",     "anthropic/claude-opus-4.8"),
-    ("sonnet",   "anthropic/claude-sonnet-4.6"),
-    ("haiku",    "anthropic/claude-haiku-4.5"),
-    ("gpt-5",    "openai/gpt-5.5"),
-    ("qwen",     "qwen/qwen3.7-max"),
-    ("deepseek", "deepseek/deepseek-v4-pro"),
-    ("glm",      "z-ai/glm-5.2"),
-    ("mimo",     "xiaomi/mimo-v2.5-pro"),
-    ("hy3",      "tencent/hy3"),
-]
-
-
-def _normalize(model: str):
-    """本地 model 名 → OpenRouter canonical id。免费档去 :free 按基础价;preview 后缀保留。"""
-    m = (model or "").strip().lower()
-    if not m or m == "<synthetic>":
-        return None
-    m = re.sub(r"\s+", "-", m)
-    m = re.sub(r"[:\-]free$", "", m)                  # 免费档按基础价
-    if "/" in m:
-        return m                                      # 已是 OpenRouter 格式
-    if m.startswith("claude"):
-        m = re.sub(r"-(\d+)-(\d+)$", r"-\1.\2", m)    # claude-opus-4-8 → claude-opus-4.8
-        return "anthropic/" + m
-    if re.match(r"(gpt|o\d|chatgpt)", m):
-        return "openai/" + m
-    if m.startswith("gemini"):
-        return "google/" + m
-    if m.startswith("grok"):
-        return "x-ai/" + m
-    if m.startswith("qwen"):
-        return "qwen/" + m
-    if m.startswith("deepseek"):
-        return "deepseek/" + m
-    if m.startswith("glm"):
-        return "z-ai/" + m
-    if m.startswith("mimo"):
-        return "xiaomi/" + m
-    if m == "hy3":
-        return "tencent/hy3"
-    if m in ("hy3-preview", "hy3 preview"):
-        return "tencent/hy3-preview"
-    return m
-
-
-VALID_PROVENANCES = frozenset({
-    "exact_catalog",
-    "exact_alias",
-    "price_equivalent",
-    "manual_proxy",
-    "family_proxy",
-    "authoritative",
-    "unknown",
-})
-
-_COST_KIND_BY_PROVENANCE = {
-    "exact_catalog": "estimated_exact",
-    "exact_alias": "estimated_exact",
-    "price_equivalent": "estimated_price_equivalent",
-    "manual_proxy": "estimated_manual_proxy",
-    "family_proxy": "estimated_family_proxy",
-    "authoritative": "authoritative_log",
-    "unknown": "unknown",
-}
-
-
-def _alias_target_and_prov(entry):
-    """解析别名条目，强制要求结构化及合法 provenance 声明。
-    非结构化 bare-string 绝不给予 exact_alias 特权，严格 fail-closed 降级为 manual_proxy。
-    """
-    if isinstance(entry, dict):
-        target = entry.get("target")
-        prov = entry.get("provenance")
-        if prov in VALID_PROVENANCES:
-            return target, prov
-        return target, "manual_proxy"
-    if isinstance(entry, str):
-        # 兼容兜底：未显式结构化并附带证据的裸别名，一律视为人工代理，禁止默认 exact
-        return entry, "manual_proxy"
-    return None, "unknown"
-
-
-def resolve_pricing_entry(model: str):
-    """返回 (canonical_id, provenance)。
-    provenance 严格分级:
-      - 'exact_catalog': 目录数据库或单价覆写中的原生 canonical ID
-      - 'exact_alias': 同名/同版本规范格式别名
-      - 'price_equivalent': 跨代/替代费率等价映射
-      - 'manual_proxy': 人工配置的代表模型代理
-      - 'family_proxy': 家族关键字粗分代理
-      - 'authoritative': 本地账本权威记录
-      - 'unknown': 未知
-    """
-    s = (model or "").strip()
-    if not s or s.lower() == "<synthetic>":
-        return None, "unknown"
-
-    if s in _OV_ALIASES:
-        target, prov = _alias_target_and_prov(_OV_ALIASES[s])
-        return target, prov
-
-    norm = _normalize(model)
-    if norm and (norm in _OV_MODELS or norm in _PRICING_DB or norm in _DEFAULT_PRICES):
-        return norm, "exact_catalog"
-
-    low = s.lower()
-    if "gemini" in low:
-        target = "google/gemini-3.1-pro-preview" if "pro" in low else "google/gemini-3.5-flash"
-        return target, "family_proxy"
-    for kw, rep in _FAMILY:
-        if kw in low:
-            return rep, "family_proxy"
-    return None, "unknown"
-
-
-def _resolve_id(model: str):
-    """解析到 canonical id; 未知模型返回 None(由调用方标记 0/未知)，严禁假冒 Opus。"""
-    cid, _ = resolve_pricing_entry(model)
-    return cid
-
-
-def _raw_price(model: str):
-    """统一查价 → {in,out,cache_read,cache_write,write1h?,provenance}。<synthetic>→全 0。"""
-    cid, prov = resolve_pricing_entry(model)
-    if cid is None:
-        return {"in": 0.0, "out": 0.0, "cache_read": 0.0, "cache_write": 0.0, "provenance": "unknown"}
-    p = dict(_DEFAULT_PRICES.get(cid, {}))            # 内置兜底打底
-    p.update(_PRICING_DB.get(cid, {}))                # OpenRouter 基准
-    p.update(_OV_MODELS.get(cid, {}))                 # 本地覆盖优先
-    out = {"in": p.get("in", 0.0), "out": p.get("out", 0.0),
-           "cache_read": p.get("cache_read", 0.0), "cache_write": p.get("cache_write", 0.0),
-           "provenance": prov}
-    if "write1h" in p:
-        out["write1h"] = p["write1h"]
-    elif cid.startswith("anthropic/"):                # Anthropic 1h 写 = 2×输入价
-        out["write1h"] = out["in"] * 2
-    return out
-
-
-def price_for(model: str):
-    """Claude 成本用:补 write5m/write1h 两档(write5m = OpenRouter cache_write)。"""
-    p = _raw_price(model)
-    return {"in": p["in"], "out": p["out"], "cache_read": p["cache_read"],
-            "write5m": p["cache_write"], "write1h": p.get("write1h", p["cache_write"]),
-            "provenance": p["provenance"]}
-
-
-def gemini_price(model: str):
-    """Gemini 成本用:in/out/cache_read 取统一查价(OpenRouter 已分版本,比正则更准)。"""
-    return _raw_price(model)
-
-
-def _known_id_or_raw(model: str):
-    """Return a canonical priced ID when known, preserving unknown model names."""
-    s = (model or "").strip()
-    if not s or s.lower() == "<synthetic>":
-        return None
-    if s in _OV_ALIASES:
-        target, _ = _alias_target_and_prov(_OV_ALIASES[s])
-        return target
-    norm = _normalize(s)
-    if norm and (norm in _OV_MODELS or norm in _PRICING_DB or norm in _DEFAULT_PRICES):
-        return norm
-    low = s.lower()
-    if "gemini" in low:
-        return "google/gemini-3.1-pro-preview" if "pro" in low else "google/gemini-3.5-flash"
-    for keyword, representative in _FAMILY:
-        if keyword in low:
-            return representative
-    return s
-
-
-def _model_identity_id(model: str):
-    """Resolve only exact catalog identities; never guess an unknown model family."""
-    s = (model or "").strip()
-    if not s or s.lower() == "<synthetic>":
-        return None
-    if s in _OV_ALIASES:
-        target, _ = _alias_target_and_prov(_OV_ALIASES[s])
-        return target
-    norm = _normalize(s)
-    if norm and (norm in _OV_MODELS or norm in _PRICING_DB or norm in _DEFAULT_PRICES):
-        return norm
-    for model_id, entry in _PRICING_DB.items():
-        if not isinstance(entry, dict):
-            continue
-        slug = entry.get("canonical_slug")
-        if isinstance(slug, str) and _normalize(slug) == norm:
-            return model_id
-    return s
-
-
-def _exact_pricing_id(model: str):
-    """Return a catalog pricing ID without family-based fallback."""
-    if model and (model in _OV_MODELS or model in _PRICING_DB or model in _DEFAULT_PRICES):
-        return model
-    return None
-
-
-def _has_known_price(model: str):
-    return _pricing_id(model) is not None
-
-
-def _pricing_id(model: str):
-    canonical = _known_id_or_raw(model)
-    if canonical and (canonical in _OV_MODELS or canonical in _PRICING_DB or canonical in _DEFAULT_PRICES):
-        return canonical
-    # ZCode currently reports GLM-5.2, whose public price is not listed yet.
-    # Use the documented GLM-5.1 equivalent until the pricing feed adds 5.2.
-    normalized = _normalize(model)
-    if normalized == "z-ai/glm-5.2" and "z-ai/glm-5.1" in _PRICING_DB:
-        return "z-ai/glm-5.1"
-    return None
-
-
-
-
-RANGE_KEYS = ["today", "yesterday", "week", "last_week", "7d", "30d", "month", "year", "all"]
-TOKEN_FIELDS = ("in", "out", "cr", "cw", "reason")
-
-
-def nice_model(m: str) -> str:
-    """claude-opus-4-7 → Opus 4.7;<synthetic> → 合成;其它去前缀/-free 后美化。"""
-    if not m or m == "<synthetic>":
-        return "合成"
-    if m == "unknown":
-        return "未知"
-    import re
-    s = m.lower()
-    for key, disp in (("opus", "Opus"), ("sonnet", "Sonnet"), ("haiku", "Haiku")):
-        if key in s:
-            mt = re.search(r"(\d+)-(\d+)", s)
-            return f"{disp} {mt.group(1)}.{mt.group(2)}" if mt else disp
-    if "gpt" in s:
-        mt = re.search(r"gpt[- ]?(\d+(?:\.\d+)?)", s)
-        version = mt.group(1) if mt else ""
-        variant_labels = []
-        for token, label in (("sol", "Sol"), ("luna", "Luna"), ("terra", "Terra"),
-                             ("mini", "Mini"), ("pro", "Pro")):
-            if re.search(rf"(?:^|[-_/ ]){token}(?:$|[-_/ ])", s):
-                variant_labels.append(label)
-        suffix = f" {' '.join(variant_labels)}" if variant_labels else ""
-        return f"GPT-{version}{suffix}" if version else "GPT"
-    if "mimo" in s:
-        name = m.split("/")[-1]
-        version = re.sub(r"^mimo[- ]?v?", "", name, flags=re.I).strip()
-        parts = [part for part in version.split("-") if part]
-        if not parts:
-            return "MiMo"
-        head = "MiMo-V" + parts[0] if parts[0][0].isdigit() else "MiMo-" + parts[0]
-        return "-".join([head] + [part.capitalize() for part in parts[1:]])
-    name = re.sub(r"[-:](free|preview|latest)$", "", m.split("/")[-1]).replace("-", " ")
-    return " ".join(w[:1].upper() + w[1:] if w[:1].isalpha() else w
-                    for w in name.split())
-
-
-def range_bounds():
-    """返回今日/昨日/近7天/本周(周一起)/近30天/本月(1号起)/本年(1月1日起)的本地起点。"""
-    now = datetime.now().astimezone()
-    today = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    yesterday = today - timedelta(days=1)
-    d7 = today - timedelta(days=6)
-    d30 = today - timedelta(days=29)
-    week = today - timedelta(days=today.weekday())   # 周一 0
-    last_week_start = week - timedelta(days=7)       # 上周一
-    month = today.replace(day=1)
-    year = today.replace(month=1, day=1)
-    return {"today": today, "yesterday": yesterday, "7d": d7, "30d": d30, "week": week,
-            "last_week": last_week_start, "last_week_end": week, "month": month, "year": year}
-
-
-def range_boundaries():
-    """同步用:明确每个相对时间范围的日期边界,避免设备间按过期 range 误合并。"""
-    b = range_bounds()
-    next_month = (b["month"].replace(day=28) + timedelta(days=4)).replace(day=1)
-    next_year = b["year"].replace(year=b["year"].year + 1)
-
-    def day_s(dt):
-        return dt.date().isoformat()
-
-    return {
-        "today": {"start": day_s(b["today"]), "end": day_s(b["today"] + timedelta(days=1))},
-        "yesterday": {"start": day_s(b["yesterday"]), "end": day_s(b["today"])},
-        "7d": {"start": day_s(b["7d"]), "end": day_s(b["today"] + timedelta(days=1))},
-        "30d": {"start": day_s(b["30d"]), "end": day_s(b["today"] + timedelta(days=1))},
-        "week": {"start": day_s(b["week"]), "end": day_s(b["week"] + timedelta(days=7))},
-        "last_week": {"start": day_s(b["last_week"]), "end": day_s(b["week"])},
-        "month": {"start": day_s(b["month"]), "end": day_s(next_month)},
-        "year": {"start": day_s(b["year"]), "end": day_s(next_year)},
-        "all": {"start": None, "end": None},
-    }
-
-
-def classify(dt, b):
-    """给定本地化 dt,返回它命中的区间 key 列表(今日同时属本周/本月/本年)。"""
-    return classify_date(dt.date(), b)
-
-
-def classify_date(d, b):
-    """给定本地日期,返回它命中的区间 key 列表。"""
-    ks = ["all"]
-    if d == b["today"].date():
-        ks.append("today")
-    if d == b["yesterday"].date():
-        ks.append("yesterday")
-    if "7d" in b and d >= b["7d"].date():
-        ks.append("7d")
-    if "30d" in b and d >= b["30d"].date():
-        ks.append("30d")
-    if d >= b["week"].date():
-        ks.append("week")
-    if b["last_week"].date() <= d < b["last_week_end"].date():
-        ks.append("last_week")
-    if d >= b["month"].date():
-        ks.append("month")
-    if d >= b["year"].date():
-        ks.append("year")
-    return ks
-
-
-def parse_ts(s: str):
-    try:
-        return datetime.fromisoformat(s.replace("Z", "+00:00"))
-    except Exception:
-        return None
-
-
-def human(n: float) -> str:
-    n = float(n)
-    if n >= 1_000_000:
-        return f"{n/1_000_000:.1f}M"
-    if n >= 1_000:
-        return f"{n/1_000:.0f}K"
-    return f"{n:.0f}"
-
-
-# ---------- 增量扫描缓存 ----------
-import tempfile as _tempfile
-import time as _time
-_LEGACY_SCAN_CACHE_FILE = os.path.join(
-    _tempfile.gettempdir(), "_tokei_scan_cache.json")
-_PREV_TOKEI_CACHE_FILE = os.path.join(
-    HOME, ".tokei", "cache", "scan_cache.json")
-_SCAN_CACHE_DIR = (
-    os.environ.get("COGNITALLY_CACHE_DIR")
-    or os.environ.get("TOKDASH_CACHE_DIR")
-    or os.environ.get("TOKEI_CACHE_DIR")
-    or _COGNITALLY_DIR
+from core.pricing import (
+    _DEFAULT_PRICES,
+    _DEEPSEEK_OFFICIAL_PRICES,
+    _FAMILY,
+    VALID_PROVENANCES,
+    _COST_KIND_BY_PROVENANCE,
+    _PRICING_DB,
+    _OVERRIDES,
+    _OV_MODELS,
+    _OV_ALIASES,
+    reload_pricing,
+    _deepseek_official_price,
+    _normalize,
+    _alias_target_and_prov,
+    resolve_pricing_entry,
+    _resolve_id,
+    _raw_price,
+    price_for,
+    gemini_price,
+    _known_id_or_raw,
+    _model_identity_id,
+    _exact_pricing_id,
+    _pricing_id,
+    _has_known_price,
+    nice_model,
 )
-_DEFAULT_SCAN_CACHE_FILE = os.path.join(
-    _SCAN_CACHE_DIR, "scan_cache.json")
-_SCAN_CACHE_FILE = _DEFAULT_SCAN_CACHE_FILE
 
-def _migrate_legacy_cognitally_state():
-    """One-time migration from ~/.config/tokdash and ~/.tokei to ~/.config/cognitally."""
-    if _USER_DIR != _COGNITALLY_DIR and _SCAN_CACHE_DIR != _COGNITALLY_DIR:
-        return
-    marker = os.path.join(_COGNITALLY_DIR, ".migration_done")
-    if os.path.exists(marker):
-        return
-    import shutil
-    try:
-        os.makedirs(_COGNITALLY_DIR, mode=0o700, exist_ok=True)
-        files_to_check = [
-            ("scan_cache.json", [
-                os.path.join(_LEGACY_TOKDASH_DIR, "scan_cache.json"),
-                os.path.join(_LEGACY_TOKEI_DIR, "cache", "scan_cache.json"),
-                _LEGACY_SCAN_CACHE_FILE
-            ]),
-            ("ledger.json", [
-                os.path.join(_LEGACY_TOKDASH_DIR, "ledger.json"),
-                os.path.join(_LEGACY_TOKEI_DIR, "ledger.json")
-            ]),
-            ("config.json", [
-                os.path.join(_LEGACY_TOKDASH_DIR, "config.json"),
-                os.path.join(_LEGACY_TOKEI_DIR, "config.json")
-            ]),
-            ("pricing.json", [
-                os.path.join(_LEGACY_TOKDASH_DIR, "pricing.json"),
-                os.path.join(_LEGACY_TOKEI_DIR, "pricing.json")
-            ]),
-            ("pricing_overrides.json", [
-                os.path.join(_LEGACY_TOKDASH_DIR, "pricing_overrides.json"),
-                os.path.join(_LEGACY_TOKEI_DIR, "pricing_overrides.json")
-            ]),
-        ]
-        for filename, candidates in files_to_check:
-            target = os.path.join(_COGNITALLY_DIR, filename)
-            if not os.path.exists(target):
-                for cand in candidates:
-                    if cand and os.path.isfile(cand):
-                        try:
-                            shutil.copyfile(cand, target)
-                            os.chmod(target, 0o600)
-                            break
-                        except OSError:
-                            pass
-        with open(marker, "w", encoding="utf-8") as mf:
-            mf.write(f"Migrated at {datetime.now().astimezone().isoformat()}\n")
-    except Exception:
-        pass
+from core.concurrency import (
+    _canonical_accounting_digest,
+    _canonical_snapshot_digest,
+    _compute_state_digest,
+    get_canonical_snapshot,
+    register_snapshot_generator,
+)
 _SCAN_CACHE_VERSION = 21
 _SCAN_CACHE_MIGRATABLE_VERSION = 19
 _CODEX_EVENT_CACHE_SUFFIX = ".codex-events"
@@ -1001,112 +526,6 @@ def _merge_dashboard_days(cache, key, days):
     merged = dict(existing) if isinstance(existing, dict) else {}
     merged.update(days)
     _cache_dashboard_days(cache, key, merged)
-
-
-def _empty_claude():
-    ranges = {k: {"in": 0, "out": 0, "cr": 0, "cw": 0, "cost": 0.0,
-                  "models": {}, "sessions": set()} for k in RANGE_KEYS}
-    return {"ranges": ranges, "cur": {"in": 0, "out": 0, "cr": 0, "cw": 0, "name": "-"}}
-
-
-def _empty_codex():
-    ranges = {k: {"in": 0, "cached": 0, "out": 0, "reason": 0,
-                  "cost": 0.0, "sessions": set(), "models": {}} for k in RANGE_KEYS}
-    return {"ranges": ranges, "limits": None, "plan": None,
-            "limits_updated": None, "limits_consumed": None}
-
-
-def _empty_gemini():
-    ranges = {k: {"in": 0, "out": 0, "cached": 0, "thoughts": 0,
-                  "cost": 0.0, "models": {}, "sessions": set()} for k in RANGE_KEYS}
-    return {"ranges": ranges, "days": {}}
-
-
-def _empty_grok():
-    ranges = {k: {"tokens": 0, "in": 0, "out": 0, "cr": 0, "cw": 0, "reason": 0,
-                  "cost": 0.0, "models": {}, "usage_sessions": set(), "usage_calls": 0,
-                  "sessions": set(), "turns": 0, "tools": 0,
-                  "duration": 0, "ctx_used": 0, "ctx_window": 0, "errors": 0,
-                  "cancellations": 0, "ttft_sum": 0, "response_sum": 0, "latency_count": 0}
-              for k in RANGE_KEYS}
-    return {"ranges": ranges, "model": None, "days": {}}
-
-
-def _empty_qoder():
-    ranges = {k: {"in": 0, "out": 0, "sessions": 0, "calls": 0, "sub_agents": 0,
-                  "duration": 0, "turns": 0, "ctx_sum": 0.0, "ctx_count": 0} for k in RANGE_KEYS}
-    return {"ranges": ranges, "model": None}
-
-
-def _empty_hermes():
-    ranges = {k: {"in": 0, "out": 0, "cr": 0, "cw": 0, "reason": 0,
-                  "cost": 0.0, "sessions": 0, "models": {}} for k in RANGE_KEYS}
-    return {"ranges": ranges}
-
-
-def _empty_token_bucket():
-    return {"in": 0, "out": 0, "cr": 0, "cw": 0, "reason": 0,
-            "cost": 0.0, "sessions": set(), "models": {}}
-
-
-def _empty_token_day():
-    return {"in": 0, "out": 0, "cr": 0, "cw": 0, "reason": 0,
-            "cost": 0.0, "models": {}, "hours": [0] * 24}
-
-
-def _empty_token_ranges():
-    return {k: _empty_token_bucket() for k in RANGE_KEYS}
-
-
-def _empty_opencode():
-    return {"ranges": _empty_token_ranges()}
-
-
-def _empty_pi():
-    return _empty_opencode()
-
-
-def _empty_workbuddy():
-    return _empty_opencode()
-
-
-def _empty_grok_bot():
-    ranges = {key: {"sessions": set(), "calls": 0, "turns": 0,
-                    "tools": 0, "duration": 0}
-              for key in RANGE_KEYS}
-    return {"ranges": ranges}
-
-
-def _empty_deepseek_harness():
-    return _empty_opencode()
-
-
-def _empty_kimicode():
-    return _empty_opencode()
-
-
-def _empty_zcode():
-    return _empty_opencode()
-
-
-def token_total(day):
-    return sum(day.get(k, 0) for k in TOKEN_FIELDS)
-
-
-def _sqlite_ro_uri(path):
-    return Path(path).resolve().as_uri() + "?mode=ro"
-
-
-def _sqlite_signature(path):
-    parts = []
-    # SHM 的 mtime 会被只读 SQLite 连接更新，不能作为数据变化信号。
-    for candidate in (path, path + "-wal"):
-        try:
-            stat = os.stat(candidate)
-        except OSError:
-            continue
-        parts.append(f"{candidate}:{stat.st_mtime_ns}:{stat.st_size}")
-    return "|".join(parts) or None
 
 
 def _iter_cached_token_days(tool_cache):
@@ -10946,178 +10365,16 @@ def _detect_local_servers(project_paths):
         return {}
 
 
-def _canonical_accounting_digest(usage_data, daily_data, projects_data):
-    """计算核心账务状态规范化数据摘要 (Canonical Accounting-State SHA-256 Digest)。
-    覆盖所有工具各时段全部计量计数 (in, out, cr, cw, reason, cost, sessions)、
-    模型级定价来源与归属 (pricing_provenance, pricing_source)、
-    所有每日历史行与工具细分、以及项目成本与 Token 归属。
-    """
-    import hashlib
 
-    # 1. 抽取规范化 usage 状态映射 (含模型级定价来源)
-    canonical_tools = {}
-    for k in sorted(usage_data.keys()):
-        if k.startswith("_"):
-            continue
-        tool_val = usage_data.get(k)
-        if not isinstance(tool_val, dict):
-            continue
-        ranges = tool_val.get("ranges") or {}
-        tool_ranges = {}
-        for rk in sorted(ranges.keys()):
-            r = ranges[rk]
-            models_summary = []
-            for m in sorted((r.get("models") or []), key=lambda x: str(x.get("name") or x.get("model_id") or "")):
-                if isinstance(m, dict):
-                    models_summary.append({
-                        "name": str(m.get("name") or m.get("model_id") or ""),
-                        "cost": round(float(m.get("cost", 0.0) or 0.0), 4),
-                        "pricing_provenance": str(m.get("pricing_provenance") or ""),
-                        "pricing_source": str(m.get("pricing_source") or ""),
-                    })
-            tool_ranges[rk] = {
-                "in": r.get("in", 0),
-                "out": r.get("out", 0),
-                "cr": r.get("cr", 0) or r.get("cached", 0),
-                "cw": r.get("cw", 0),
-                "reason": r.get("reason", 0),
-                "cost": round(float(r.get("cost", 0.0) or 0.0), 4),
-                "sessions": len(r.get("sessions") or []) if isinstance(r.get("sessions"), (list, set)) else int(r.get("sessions") or 0),
-                "models": models_summary,
-            }
-        canonical_tools[k] = tool_ranges
+def _default_snapshot_generator():
+    usage_data, latest_cache = compute(return_cache=True)
+    meta = _load_json(PRICING_FILE, {}).get("_meta", {})
+    usage_data["_pricing"] = {"updated_at": meta.get("updated_at", ""), "count": meta.get("count", 0)}
+    daily_data = build_daily_costs(_arg_period(), refresh=False, _cache=latest_cache)
+    projects_data = get_projects(refresh=False, _cache=latest_cache)
+    return usage_data, daily_data, projects_data
 
-    # 2. 抽取规范化 daily 数据
-    days_list = daily_data.get("daily", []) if isinstance(daily_data, dict) else (daily_data if isinstance(daily_data, list) else [])
-    canonical_days = []
-    for d in days_list:
-        canonical_days.append({
-            "date": d.get("date"),
-            "total": round(float(d.get("total", 0.0) or 0.0), 2),
-            "tokens": d.get("tokens", 0),
-            "tool_costs": d.get("tool_costs") or {},
-        })
-
-    # 3. 抽取规范化 projects 数据
-    canonical_projects = []
-    for p in (projects_data or []):
-        canonical_projects.append({
-            "path": p.get("path"),
-            "cost": round(float(p.get("cost", 0.0) or 0.0), 2),
-            "tokens": p.get("tokens", 0),
-        })
-
-    state_obj = {
-        "tools": canonical_tools,
-        "daily": canonical_days,
-        "projects": canonical_projects,
-    }
-    canonical_json = json.dumps(state_obj, sort_keys=True, separators=(',', ':'))
-    return hashlib.sha256(canonical_json.encode("utf-8")).hexdigest()[:16]
-
-
-_canonical_snapshot_digest = _canonical_accounting_digest
-_compute_state_digest = _canonical_accounting_digest
-
-
-_SNAPSHOT_CACHE_FILE = os.path.join(_SCAN_CACHE_DIR, "canonical_snapshot.json")
-_SNAPSHOT_LOCK_FILE = os.path.join(_SCAN_CACHE_DIR, "canonical_snapshot.lock")
-_SNAPSHOT_TTL = 5.0
-
-
-def get_canonical_snapshot(ttl=5.0, force=False):
-    """原子一致性快照(带跨进程单飞防护): 仅执行单次 compute(), 在单一内存世代内派生 usage, daily_costs 和 projects。
-    
-    多进程(如 MCP Server, Electron UI, 命令行)同时请求时，仅有一个进程计算，其余等待并直接复用新鲜快照，彻底杜绝内存风暴与重叠计算。
-    """
-    _migrate_legacy_cognitally_state()
-    try:
-        os.makedirs(_SCAN_CACHE_DIR, mode=0o700, exist_ok=True)
-    except OSError:
-        pass
-
-    # 1. 快速路径: 若缓存文件存在且在 TTL 内，直接读取返回
-    if not force and os.path.isfile(_SNAPSHOT_CACHE_FILE):
-        try:
-            mtime = os.path.getmtime(_SNAPSHOT_CACHE_FILE)
-            if _time.time() - mtime < ttl:
-                with open(_SNAPSHOT_CACHE_FILE, "r", encoding="utf-8") as f:
-                    cached = json.load(f)
-                if isinstance(cached, dict) and "generation" in cached and "usage" in cached:
-                    return cached
-        except Exception:
-            pass
-
-    # 2. 跨进程单飞锁
-    lock_fd = None
-    try:
-        lock_fd = os.open(_SNAPSHOT_LOCK_FILE, os.O_CREAT | os.O_RDWR, 0o600)
-        import fcntl
-        fcntl.flock(lock_fd, fcntl.LOCK_EX)
-
-        # 再次检查: 排队等待锁期间是否已有先行进程计算完成
-        if not force and os.path.isfile(_SNAPSHOT_CACHE_FILE):
-            try:
-                mtime = os.path.getmtime(_SNAPSHOT_CACHE_FILE)
-                if _time.time() - mtime < ttl:
-                    with open(_SNAPSHOT_CACHE_FILE, "r", encoding="utf-8") as f:
-                        cached = json.load(f)
-                    if isinstance(cached, dict) and "generation" in cached and "usage" in cached:
-                        return cached
-            except Exception:
-                pass
-
-        import uuid
-        snap_id = str(uuid.uuid4())
-        gen_time = datetime.now().astimezone().isoformat()
-
-        # 核心计算并获取当前内存世代引用，完全避开磁盘读取窗口
-        usage_data, latest_cache = compute(return_cache=True)
-        meta = _load_json(PRICING_FILE, {}).get("_meta", {})
-        usage_data["_pricing"] = {"updated_at": meta.get("updated_at", ""), "count": meta.get("count", 0)}
-
-        # 同一内存 generation 派生
-        daily_data = build_daily_costs(_arg_period(), refresh=False, _cache=latest_cache)
-        projects_data = get_projects(refresh=False, _cache=latest_cache)
-
-        # 真实计算基于该完整内存世代数据的规范化 SHA-256 状态摘要
-        gen_token = _canonical_snapshot_digest(usage_data, daily_data, projects_data)
-
-        payload = {
-            "snapshot_id": snap_id,
-            "generation": gen_token,
-            "generated_at": gen_time,
-            "usage": usage_data,
-            "daily_costs": daily_data,
-            "projects": projects_data,
-        }
-
-        # 原子落盘快照缓存
-        tmp = None
-        try:
-            fd, tmp = _tempfile.mkstemp(prefix=".snap-", suffix=".json", dir=_SCAN_CACHE_DIR)
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                json.dump(payload, f, separators=(',', ':'), ensure_ascii=False)
-            os.chmod(tmp, 0o600)
-            os.replace(tmp, _SNAPSHOT_CACHE_FILE)
-        except Exception:
-            if tmp and os.path.exists(tmp):
-                try:
-                    os.unlink(tmp)
-                except OSError:
-                    pass
-        return payload
-    finally:
-        if lock_fd is not None:
-            try:
-                import fcntl
-                fcntl.flock(lock_fd, fcntl.LOCK_UN)
-            except OSError:
-                pass
-            try:
-                os.close(lock_fd)
-            except OSError:
-                pass
+register_snapshot_generator(_default_snapshot_generator)
 
 
 def snapshot():
