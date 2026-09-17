@@ -108,3 +108,49 @@ class TestPricingEngine(unittest.TestCase):
             ck = _COST_KIND_BY_PROVENANCE.get(p)
             self.assertIsNotNone(ck)
             self.assertNotEqual(ck, "unknown", f"{p} must not map to unknown cost_kind")
+
+    def test_expanded_vendor_and_agent_model_resolution(self):
+        """验证对 Minimax, Kimi, Stealth Ox, Meta Muse, StepFun, Hy4 等主流 Agent 模型的解析契约。"""
+        resolve_pricing_entry = getattr(usage_module, "resolve_pricing_entry")
+        price_for = getattr(usage_module, "price_for")
+
+        # 1. Minimax M3 (exact catalog via minimax vendor normalization)
+        cid, prov = resolve_pricing_entry("Minimax M3")
+        self.assertEqual(prov, "exact_catalog")
+        self.assertEqual(cid, "minimax/minimax-m3")
+
+        # 2. Kimi K3 (exact alias via Moonshot AI mapping)
+        cid, prov = resolve_pricing_entry("Kimi K3")
+        self.assertEqual(prov, "exact_alias")
+        self.assertEqual(cid, "moonshotai/kimi-k3")
+
+        # 3. Case-insensitive alias matching (Hy4 Preview vs Hy4 preview)
+        cid, prov = resolve_pricing_entry("Hy4 Preview")
+        self.assertEqual(prov, "exact_alias")
+        self.assertEqual(cid, "tencent/hy4-preview")
+
+        # 4. Stealth Ox Alpha (free stealth model)
+        p_ox = price_for("Ox Alpha")
+        self.assertEqual(p_ox["provenance"], "exact_alias")
+        self.assertEqual(p_ox["in"], 0.0)
+        self.assertEqual(p_ox["out"], 0.0)
+
+        # 5. Meta Muse Spark Contributor
+        cid, prov = resolve_pricing_entry("Muse Spark 1.2 Contributor")
+        self.assertEqual(prov, "exact_catalog")
+        self.assertEqual(cid, "meta/muse-spark-1.2-contributor")
+
+        # 6. StepFun family proxy fallback
+        cid, prov = resolve_pricing_entry("Step Explore")
+        self.assertEqual(prov, "family_proxy")
+        self.assertEqual(cid, "stepfun/step-3.5-flash")
+
+        # 7. Chinese synthetic label zero-cost contract
+        p_synth = price_for("合成")
+        self.assertEqual(p_synth["in"], 0.0)
+        self.assertEqual(p_synth["out"], 0.0)
+        self.assertEqual(p_synth["provenance"], "exact_catalog")
+
+
+if __name__ == "__main__":
+    unittest.main()

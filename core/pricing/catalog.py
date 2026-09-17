@@ -45,11 +45,17 @@ _FAMILY = [
     ("sonnet",   "anthropic/claude-sonnet-4.6"),
     ("haiku",    "anthropic/claude-haiku-4.5"),
     ("gpt-5",    "openai/gpt-5.5"),
+    ("gpt-6",    "openai/gpt-5.5"),
     ("qwen",     "qwen/qwen3.7-max"),
     ("deepseek", "deepseek/deepseek-v4-pro"),
     ("glm",      "z-ai/glm-5.2"),
     ("mimo",     "xiaomi/mimo-v2.5-pro"),
-    ("hy3",      "tencent/hy3"),
+    ("hy",       "tencent/hy3"),
+    ("kimi",     "moonshotai/kimi-k3"),
+    ("minimax",  "minimax/minimax-m3"),
+    ("step",     "stepfun/step-3.5-flash"),
+    ("muse",     "meta/muse-spark-1.2-contributor"),
+    ("ox",       "stealth/ox-alpha"),
 ]
 
 VALID_PROVENANCES = frozenset({
@@ -76,11 +82,12 @@ _PRICING_DB = {}
 _OVERRIDES = {}
 _OV_MODELS = {}
 _OV_ALIASES = {}
+_OV_ALIASES_LOWER = {}
 
 
 def reload_pricing():
     """Reload pricing databases and overrides from configuration files."""
-    global _PRICING_DB, _OVERRIDES, _OV_MODELS, _OV_ALIASES
+    global _PRICING_DB, _OVERRIDES, _OV_MODELS, _OV_ALIASES, _OV_ALIASES_LOWER
     _PRICING_DB.clear()
     _PRICING_DB.update(_load_json(PRICING_FILE, {}).get("models", {}))
     _OVERRIDES.clear()
@@ -89,6 +96,8 @@ def reload_pricing():
     _OV_MODELS.update(_OVERRIDES.get("models", {}))
     _OV_ALIASES.clear()
     _OV_ALIASES.update(_OVERRIDES.get("aliases", {}))
+    _OV_ALIASES_LOWER.clear()
+    _OV_ALIASES_LOWER.update({k.lower(): v for k, v in _OV_ALIASES.items()})
 
 
 # Initial load
@@ -105,7 +114,9 @@ def _deepseek_official_price(model):
 def _normalize(model: str):
     """本地 model 名 → OpenRouter canonical id。免费档去 :free 按基础价;preview 后缀保留。"""
     m = (model or "").strip().lower()
-    if not m or m == "<synthetic>":
+    if not m or m in ("<synthetic>", "合成", "synthetic"):
+        return None
+    if m in ("unknown", "未知"):
         return None
     m = re.sub(r"\s+", "-", m)
     m = re.sub(r"[:\-]free$", "", m)                  # 免费档按基础价
@@ -128,10 +139,18 @@ def _normalize(model: str):
         return "z-ai/" + m
     if m.startswith("mimo"):
         return "xiaomi/" + m
-    if m == "hy3":
-        return "tencent/hy3"
-    if m in ("hy3-preview", "hy3 preview"):
-        return "tencent/hy3-preview"
+    if m.startswith("kimi"):
+        return "moonshotai/" + m
+    if m.startswith("minimax"):
+        return "minimax/" + m
+    if m.startswith("step"):
+        return "stepfun/" + m
+    if m.startswith("muse"):
+        return "meta/" + m
+    if m.startswith("ox"):
+        return "stealth/" + m
+    if m.startswith("hy"):
+        return "tencent/" + m
     return m
 
 
@@ -163,18 +182,24 @@ def resolve_pricing_entry(model: str):
       - 'unknown': 未知
     """
     s = (model or "").strip()
-    if not s or s.lower() == "<synthetic>":
+    if not s or s.lower() in ("<synthetic>", "合成", "synthetic"):
+        return None, "unknown"
+    if s.lower() in ("unknown", "未知"):
         return None, "unknown"
 
     if s in _OV_ALIASES:
         target, prov = _alias_target_and_prov(_OV_ALIASES[s])
         return target, prov
 
+    low = s.lower()
+    if low in _OV_ALIASES_LOWER:
+        target, prov = _alias_target_and_prov(_OV_ALIASES_LOWER[low])
+        return target, prov
+
     norm = _normalize(model)
     if norm and (norm in _OV_MODELS or norm in _PRICING_DB or norm in _DEFAULT_PRICES):
         return norm, "exact_catalog"
 
-    low = s.lower()
     if "gemini" in low:
         target = "google/gemini-3.1-pro-preview" if "pro" in low else "google/gemini-3.5-flash"
         return target, "family_proxy"
@@ -191,7 +216,10 @@ def _resolve_id(model: str):
 
 
 def _raw_price(model: str):
-    """统一查价 → {in,out,cache_read,cache_write,write1h?,provenance}。<synthetic>→全 0。"""
+    """统一查价 → {in,out,cache_read,cache_write,write1h?,provenance}。<synthetic>/合成→全 0。"""
+    s = (model or "").strip().lower()
+    if s in ("<synthetic>", "合成", "synthetic"):
+        return {"in": 0.0, "out": 0.0, "cache_read": 0.0, "cache_write": 0.0, "provenance": "exact_catalog"}
     cid, prov = resolve_pricing_entry(model)
     if cid is None:
         return {"in": 0.0, "out": 0.0, "cache_read": 0.0, "cache_write": 0.0, "provenance": "unknown"}
