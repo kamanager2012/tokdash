@@ -5,7 +5,14 @@ designed for seamless integration into Tmux, Starship, Zsh/Bash prompts,
 and terminal statuslines.
 """
 
+import sys
 from typing import Dict, Any, Optional
+
+
+def _can_support_unicode() -> bool:
+    """Detect if stdout encoding supports Unicode emoji safely."""
+    encoding = getattr(sys.stdout, "encoding", None) or ""
+    return "utf" in encoding.lower()
 
 
 def _human_tokens(count: int) -> str:
@@ -23,15 +30,18 @@ def render_statusline(
     snapshot: Dict[str, Any],
     period: str = "today",
     format_type: str = "default",
-    show_icons: bool = True
+    show_icons: Optional[bool] = None
 ) -> str:
     """Render a single-line statusline badge from a canonical snapshot.
     
     Guarantees:
     - Zero newlines (safe for tmux and shell PS1)
     - Millisecond formatting execution
+    - Auto ASCII fallback when Unicode emoji are not supported
     - Graceful zero-loss fallback on empty snapshots
     """
+    if show_icons is None:
+        show_icons = _can_support_unicode()
     usage = snapshot.get("usage", {}) if isinstance(snapshot, dict) else {}
     
     total_cost = 0.0
@@ -104,6 +114,7 @@ def render_statusline(
         parts.append(agents_label)
 
     if quota_alerts:
-        parts.append(f"⚠️ {' '.join(quota_alerts)}")
+        alert_prefix = "⚠️ " if show_icons else "[!] "
+        parts.append(f"{alert_prefix}{' '.join(quota_alerts)}")
 
     return " | ".join(parts)

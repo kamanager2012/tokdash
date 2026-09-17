@@ -11244,7 +11244,8 @@ if __name__ == "__main__":
         if "--json" in sys.argv:
             fmt = "json"
         snap = get_canonical_snapshot(force="--force" in sys.argv)
-        line = render_statusline(snap, period=_arg_period(default="today"), format_type=fmt)
+        show_icons = False if "--no-icons" in sys.argv else None
+        line = render_statusline(snap, period=_arg_period(default="today"), format_type=fmt, show_icons=show_icons)
         print(line)
     elif "--budget-check" in sys.argv:
         from budget_guard import check_budget

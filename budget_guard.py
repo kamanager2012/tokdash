@@ -48,8 +48,13 @@ def check_budget(
         exceeded = current_cost >= threshold_usd
 
     notified = False
+    notify_reason = "disabled"
     if exceeded and send_notification:
-        notified = _trigger_desktop_notification(current_cost, threshold_usd, period)
+        notified, notify_reason = _trigger_desktop_notification(current_cost, threshold_usd, period)
+    elif exceeded:
+        notify_reason = "notification_not_requested"
+    else:
+        notify_reason = "within_budget"
 
     return {
         "period": period,
@@ -57,26 +62,29 @@ def check_budget(
         "threshold_usd": threshold_usd,
         "exceeded": exceeded,
         "notified": notified,
+        "notification_status": notify_reason,
         "generation": snapshot.get("generation", "")
     }
 
 
-def _trigger_desktop_notification(cost: float, threshold: float, period: str) -> bool:
+def _trigger_desktop_notification(cost: float, threshold: float, period: str) -> tuple[bool, str]:
     """Send native Linux desktop notification via notify-send."""
     notify_bin = shutil.which("notify-send")
     if not notify_bin:
-        return False
+        return False, "no_notify_send_binary"
 
     title = "⚠️ Cognitally: Budget Limit Exceeded!"
     body = f"AI coding agent spending for {period} has reached ${cost:.2f} (Limit: ${threshold:.2f})."
     
     try:
-        subprocess.run(
+        res = subprocess.run(
             [notify_bin, "-u", "critical", "-a", "Cognitally", title, body],
             timeout=2,
             check=False,
             capture_output=True
         )
-        return True
-    except Exception:
-        return False
+        if res.returncode == 0:
+            return True, "sent"
+        return False, f"notify_send_exit_{res.returncode}"
+    except Exception as e:
+        return False, f"exception_{type(e).__name__}"

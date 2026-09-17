@@ -74,6 +74,12 @@ class TestStatuslineAndGuardrails(unittest.TestCase):
         self.assertEqual(data["tokens"], 7400)
         self.assertEqual(data["active_agents_count"], 2)
 
+        # 6. No-icons plain ASCII format
+        res_no_icons = statusline_engine.render_statusline(synthetic_snapshot, period="today", show_icons=False)
+        self.assertNotIn("⚡", res_no_icons)
+        self.assertNotIn("⚠️", res_no_icons)
+        self.assertIn("[!] codex:85%", res_no_icons)
+
     def test_statusline_cli_contract(self):
         """测试 CLI 子命令 --statusline 的单行输出契约与毫秒级返回。"""
         res = self.run_cli("--statusline")
@@ -81,6 +87,11 @@ class TestStatuslineAndGuardrails(unittest.TestCase):
         lines = res.stdout.strip().splitlines()
         self.assertEqual(len(lines), 1, "--statusline output must be strictly 1 line")
         self.assertTrue(lines[0].startswith("⚡ $"), "Statusline should include cost prefix")
+
+        # No-icons CLI test
+        res_no_icons = self.run_cli("--statusline", "--no-icons")
+        self.assertEqual(res_no_icons.returncode, 0)
+        self.assertNotIn("⚡", res_no_icons.stdout)
 
         # JSON format CLI test
         res_json = self.run_cli("--statusline", "--json")
@@ -106,11 +117,18 @@ class TestStatuslineAndGuardrails(unittest.TestCase):
         rep1 = budget_guard.check_budget(synthetic_snapshot, period="today", threshold_usd=10.0, send_notification=False)
         self.assertFalse(rep1["exceeded"])
         self.assertEqual(rep1["current_cost_usd"], 5.50)
+        self.assertEqual(rep1["notification_status"], "within_budget")
 
         # 2. Exceeded limit
         rep2 = budget_guard.check_budget(synthetic_snapshot, period="today", threshold_usd=5.0, send_notification=False)
         self.assertTrue(rep2["exceeded"])
         self.assertEqual(rep2["threshold_usd"], 5.0)
+        self.assertEqual(rep2["notification_status"], "notification_not_requested")
+
+        # 3. No limit set
+        rep3 = budget_guard.check_budget(synthetic_snapshot, period="today", threshold_usd=None)
+        self.assertFalse(rep3["exceeded"])
+        self.assertIsNone(rep3["threshold_usd"])
 
     def test_budget_check_cli_contract(self):
         """测试 CLI 子命令 --budget-check 与 --budget-limit 的行为契约。"""
