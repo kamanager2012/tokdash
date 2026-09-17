@@ -57,804 +57,56 @@ from core.storage import (
 )
 from core.collectors.claude import _iso_to_epoch
 
-# TTL 曾等于 App 的 30s 刷新间隔,缓存每轮刚好过期 —— 等于每次刷新都真打一次官方
-# 接口(约 2880 次/天)。额度对应的是周窗口,变化很慢,拉长到 5 分钟没有感知差别。
-_CODEX_QUOTA_TTL = 300
-_CODEX_QUOTA_FALLBACK_TTL = 300
-_CODEX_USAGE_URL = "https://chatgpt.com/backend-api/wham/usage"
-_CODEX_USAGE_MAX_RESPONSE_BYTES = 256 * 1024
-_CODEX_RESET_CARDS_URL = "https://chatgpt.com/backend-api/wham/rate-limit-reset-credits"
-_CODEX_RESET_CARDS_REFRESH_INTERVAL = 24 * 3600
-_CODEX_RESET_CARDS_RETRY_INTERVAL = 6 * 3600
-_CODEX_RESET_CARDS_MAX_RESPONSE_BYTES = 256 * 1024
-
-
-# _atomic_write_json imported from core.config
-
-
-def _window_from_codex_live(window):
-    if not isinstance(window, dict):
-        return None
-    used = window.get("used_percent")
-    reset_at = window.get("reset_at")
-    reset_after = window.get("reset_after_seconds")
-    if reset_at is None and reset_after is not None:
-        reset_at = int(datetime.now().timestamp() + float(reset_after))
-    out = {}
-    if used is not None:
-        out["used_percent"] = float(used)
-    if window.get("limit_window_seconds") is not None:
-        out["window_minutes"] = int(round(float(window["limit_window_seconds"]) / 60))
-    if reset_at is not None:
-        out["resets_at"] = int(reset_at)
-    return out or None
-
-
-def _codex_live_to_limits(data):
-    rl = (data or {}).get("rate_limit") or {}
-    primary = _window_from_codex_live(rl.get("primary_window"))
-    secondary = _window_from_codex_live(rl.get("secondary_window"))
-    if not primary and not secondary:
-        return None
-    return {
-        "limit_id": "codex",
-        "limit_name": None,
-        "primary": primary,
-        "secondary": secondary,
-        "credits": data.get("credits"),
-        "plan_type": data.get("plan_type"),
-        "rate_limit_reached_type": rl.get("rate_limit_reached_type"),
-    }
-
-
-def _codex_limits_have_active_window(limits, now_epoch=None):
-    now = float(now_epoch if now_epoch is not None else datetime.now().timestamp())
-    for slot_name in ("primary", "secondary"):
-        slot = (limits or {}).get(slot_name) or {}
-        reset = slot.get("resets_at")
-        try:
-            if reset is not None and float(reset) > now:
-                return True
-        except (TypeError, ValueError, OverflowError):
-            continue
-    return False
-
-
-def _cached_codex_live_limits(max_age, allow_active_window=False, account_key=None):
-    cached = _load_json(CODEX_QUOTA_CACHE, {})
-    fetched_at = cached.get("fetched_at")
-    limits = cached.get("limits")
-    if not fetched_at or not limits:
-        return None
-    cached_account_key = cached.get("account_key")
-    if account_key and cached_account_key and cached_account_key != account_key:
-        return None
-    try:
-        fetched_at = float(fetched_at)
-    except (TypeError, ValueError, OverflowError):
-        return None
-    age = datetime.now().timestamp() - fetched_at
-    if age > max_age and not (
-            allow_active_window and _codex_limits_have_active_window(limits)):
-        return None
-    return limits, cached.get("plan"), fetched_at
-
-
-def _codex_live_snapshot_is_current(live_updated, local_updated):
-    if live_updated is None or not local_updated:
-        return True
-    local_epoch = _iso_to_epoch(local_updated)
-    if local_epoch is None:
-        return True
-    try:
-        return float(live_updated) >= local_epoch
-    except (TypeError, ValueError, OverflowError):
-        return False
-
-
-def _decode_jwt_claims(token):
-    if not isinstance(token, str) or token.count(".") < 2:
-        return {}
-    try:
-        import base64
-        payload = token.split(".")[1]
-        payload += "=" * (-len(payload) % 4)
-        decoded = json.loads(base64.urlsafe_b64decode(payload))
-        return decoded if isinstance(decoded, dict) else {}
-    except Exception:
-        return {}
-
-
-def _codex_config():
-    """→ {"model_provider": str|None, "model_providers": [名字]};读不到返回空。
-
-    tomllib 是 3.11+ 才有的,而没装 Homebrew Python 的机器会落到 /usr/bin/python3
-    (macOS 自带 3.9),模块级 import 会让整个脚本崩掉 —— 所以惰性导入 + 最小回退。
-    """
-    try:
-        with open(CODEX_CONFIG, "rb") as f:
-            raw = f.read(64 * 1024)
-    except OSError:
-        return {}
-    try:
-        import tomllib
-    except ImportError:
-        # 3.9 回退:只认顶层 model_provider = "x" 和 [model_providers.x] 段名。
-        text = raw.decode("utf-8", errors="ignore")
-        hit = re.search(r'^\s*model_provider\s*=\s*["\']([^"\']+)["\']', text, re.M)
-        return {
-            "model_provider": hit.group(1) if hit else None,
-            "model_providers": re.findall(
-                r'^\s*\[\s*model_providers\.([^\]\s.]+)', text, re.M),
-        }
-    try:
-        data = tomllib.loads(raw.decode("utf-8", errors="ignore")) or {}
-    except Exception:
-        return {}
-    provider = data.get("model_provider")
-    return {
-        "model_provider": provider if isinstance(provider, str) else None,
-        "model_providers": list((data.get("model_providers") or {}).keys()),
-    }
-
-
-def _codex_is_custom_provider():
-    """True 表示 Codex 已切到非 OpenAI 的 provider(cc Switch 之类)。
-
-    只认显式声明:光有 [model_providers.x] 段、但没把 model_provider 指过去的用户
-    仍在用官方额度,误判会把他们的额度卡整块藏掉。
-    """
-    provider = _codex_config().get("model_provider")
-    return bool(provider) and provider != "openai"
-
-
-def _codex_auth_context(auth):
-    if not isinstance(auth, dict):
-        return {}
-    nested = auth.get("tokens")
-    tokens = nested if isinstance(nested, dict) else {}
-
-    def value(*names):
-        for source in (tokens, auth):
-            for name in names:
-                item = source.get(name)
-                if isinstance(item, str) and item:
-                    return item
-        return None
-
-    access_token = value("access_token", "accessToken")
-    if not access_token:
-        return {}
-    id_token = value("id_token", "idToken")
-    claims = _decode_jwt_claims(access_token)
-    id_claims = _decode_jwt_claims(id_token)
-    auth_claim = claims.get("https://api.openai.com/auth")
-    id_auth_claim = id_claims.get("https://api.openai.com/auth")
-    auth_claim = auth_claim if isinstance(auth_claim, dict) else {}
-    id_auth_claim = id_auth_claim if isinstance(id_auth_claim, dict) else {}
-    account_id = value("account_id", "accountId")
-    account_id = account_id or auth_claim.get("chatgpt_account_id")
-    account_id = account_id or id_auth_claim.get("chatgpt_account_id")
-    identity = account_id or claims.get("sub") or id_claims.get("sub") or access_token
-    return {
-        "access_token": access_token,
-        "account_id": str(account_id) if account_id else None,
-        "account_key": hashlib.sha256(str(identity).encode("utf-8")).hexdigest(),
-        "auth_key": hashlib.sha256(access_token.encode("utf-8")).hexdigest(),
-    }
-
-
-def fetch_codex_live_limits():
-    if os.environ.get("TOKEI_CODEX_LIVE_QUOTA") == "0":
-        return None
-    # When the user has switched to a third-party provider (cc Switch, etc.),
-    # the official OpenAI quota endpoint is no longer relevant. Skip it and
-    # clear any stale cached official quota so the dashboard falls back to
-    # showing only token usage/cost.
-    if _codex_is_custom_provider():
-        try:
-            if os.path.exists(CODEX_QUOTA_CACHE):
-                os.remove(CODEX_QUOTA_CACHE)
-        except Exception:
-            pass
-        return None
-    cached = _cached_codex_live_limits(_CODEX_QUOTA_TTL)
-    if cached:
-        return cached
-    auth = _load_json(CODEX_AUTH, {})
-    auth_context = _codex_auth_context(auth)
-    access_token = auth_context.get("access_token")
-    account_key = auth_context.get("account_key")
-    auth_key = auth_context.get("auth_key")
-    if not access_token or not account_key:
-        return None
-    cache_state = _load_json(CODEX_QUOTA_CACHE, {})
-    cached = _cached_codex_live_limits(_CODEX_QUOTA_TTL, account_key=account_key)
-    if cached:
-        return cached
-    # 失败退避:网络不可达(如公司代理拦截)时 5 分钟内不再联网重试,
-    # 否则每轮 30s 刷新都会白等约 6s 超时
-    last_failure = cache_state.get("last_failure_at", 0)
-    if cache_state.get("account_key") not in (None, account_key):
-        last_failure = 0
-    if cache_state.get("account_key") == account_key \
-            and cache_state.get("auth_key") not in (None, auth_key):
-        last_failure = 0
-    try:
-        failure_is_recent = (
-            bool(last_failure)
-            and datetime.now().timestamp() - float(last_failure) < 300)
-    except (TypeError, ValueError, OverflowError):
-        failure_is_recent = False
-    if failure_is_recent:
-        return _cached_codex_live_limits(
-            _CODEX_QUOTA_FALLBACK_TTL, allow_active_window=True,
-            account_key=account_key)
-    try:
-        import urllib.request
-        from urllib.parse import urlparse
-        req = urllib.request.Request(_CODEX_USAGE_URL)
-        req.add_header("Accept", "application/json")
-        req.add_header("User-Agent", "Tokei")
-        req.add_unredirected_header("Authorization", f"Bearer {access_token}")
-        account_id = auth_context.get("account_id")
-        if account_id:
-            req.add_unredirected_header("ChatGPT-Account-Id", account_id)
-        with urllib.request.urlopen(req, timeout=3) as res:
-            final_url = urlparse(res.geturl())
-            if final_url.scheme != "https" or final_url.hostname != "chatgpt.com":
-                raise ValueError("unexpected Codex usage redirect")
-            raw = res.read(_CODEX_USAGE_MAX_RESPONSE_BYTES + 1)
-        if len(raw) > _CODEX_USAGE_MAX_RESPONSE_BYTES:
-            raise ValueError("Codex usage response is too large")
-        data = json.loads(raw)
-        limits = _codex_live_to_limits(data)
-        if not limits:
-            raise ValueError("invalid Codex usage response")
-        plan = data.get("plan_type")
-        fetched_at = datetime.now().timestamp()
-        _atomic_write_json(CODEX_QUOTA_CACHE, {
-            "fetched_at": fetched_at,
-            "limits": limits,
-            "plan": plan,
-            "account_key": account_key,
-            "auth_key": auth_key,
-            "source": "live",
-        })
-        return limits, plan, fetched_at
-    except Exception:
-        try:
-            state = _load_json(CODEX_QUOTA_CACHE, {})
-            if state.get("account_key") not in (None, account_key):
-                state = {}
-            state["last_failure_at"] = datetime.now().timestamp()
-            state["account_key"] = account_key
-            state["auth_key"] = auth_key
-            _atomic_write_json(CODEX_QUOTA_CACHE, state)
-        except Exception:
-            pass
-        return _cached_codex_live_limits(
-            _CODEX_QUOTA_FALLBACK_TTL, allow_active_window=True,
-            account_key=account_key)
-
-
-def _normalize_codex_reset_cards(data, now_epoch):
-    if not isinstance(data, dict) or not isinstance(data.get("credits"), list):
-        return None
-    expires = []
-    for credit in data["credits"]:
-        if not isinstance(credit, dict) or credit.get("status") != "available":
-            continue
-        if credit.get("is_supported_by_plan") is False:
-            continue
-        expires_at = parse_ts(credit.get("expires_at") or "")
-        if expires_at is None:
-            continue
-        epoch = int(expires_at.timestamp())
-        if epoch > now_epoch:
-            expires.append(epoch)
-    ordered = sorted(expires)
-    return {
-        "count": len(ordered),
-        "expires": ordered,
-        "updated": int(now_epoch),
-    }
-
-
-def _cached_codex_reset_cards(state, now_epoch):
-    cards = state.get("cards") if isinstance(state, dict) else None
-    if not isinstance(cards, dict):
-        return {}
-    expires = []
-    for value in cards.get("expires") or []:
-        try:
-            epoch = int(value)
-        except (TypeError, ValueError, OverflowError):
-            continue
-        if epoch > now_epoch:
-            expires.append(epoch)
-    expires.sort()
-    return {
-        "count": len(expires),
-        "expires": expires,
-        "updated": cards.get("updated"),
-    }
-
-
-def _codex_reset_cards_next_attempt(cards, now_epoch):
-    next_daily = int(now_epoch + _CODEX_RESET_CARDS_REFRESH_INTERVAL)
-    expires = []
-    for value in cards.get("expires") or []:
-        try:
-            epoch = int(value)
-        except (TypeError, ValueError, OverflowError):
-            continue
-        if epoch > now_epoch:
-            expires.append(epoch)
-    return min(next_daily, min(expires) + 60) if expires else next_daily
-
-
-def _save_codex_reset_cards_state(state):
-    try:
-        _atomic_write_json(CODEX_RESET_CARDS_CACHE, state)
-        os.chmod(CODEX_RESET_CARDS_CACHE, 0o600)
-    except Exception:
-        pass
-
-
-def fetch_codex_reset_cards(now_epoch=None):
-    """Return available reset-card expirations with a persistent low-frequency cache."""
-    if os.environ.get("TOKEI_CODEX_LIVE_QUOTA") == "0":
-        return {}
-    # 重置卡是 OpenAI 账号级资产,不随 CLI 当前指向的 provider 变化 —— 临时切到
-    # 第三方中转的人手上那几张卡还在,切回来就要用,所以这里不按 provider 屏蔽。
-    now_epoch = int(datetime.now().timestamp()) if now_epoch is None else int(now_epoch)
-    auth = _load_json(CODEX_AUTH, {})
-    auth_context = _codex_auth_context(auth)
-    access_token = auth_context.get("access_token")
-    account_key = auth_context.get("account_key")
-    auth_key = auth_context.get("auth_key")
-    if not access_token or not account_key or not auth_key:
-        return {}
-
-    state = _load_json(CODEX_RESET_CARDS_CACHE, {})
-    if not isinstance(state, dict) or state.get("account_key") != account_key:
-        state = {"account_key": account_key, "auth_key": auth_key}
-    elif state.get("auth_key") and state.get("auth_key") != auth_key:
-        # Codex refreshed or replaced the token after an auth failure. Retry once now.
-        state["next_attempt_at"] = 0
-        state.pop("last_error", None)
-    state["auth_key"] = auth_key
-    cached = _cached_codex_reset_cards(state, now_epoch)
-    try:
-        next_attempt_at = int(state.get("next_attempt_at") or 0)
-    except (TypeError, ValueError, OverflowError):
-        next_attempt_at = 0
-    if now_epoch < next_attempt_at:
-        return cached
-
-    try:
-        import urllib.request
-        from urllib.parse import urlparse
-        request = urllib.request.Request(_CODEX_RESET_CARDS_URL)
-        request.add_header("Accept", "application/json")
-        request.add_header("User-Agent", "Tokei")
-        request.add_unredirected_header("Authorization", f"Bearer {access_token}")
-        account_id = auth_context.get("account_id")
-        if account_id:
-            request.add_unredirected_header("ChatGPT-Account-Id", str(account_id))
-        with urllib.request.urlopen(request, timeout=3) as response:
-            final_url = urlparse(response.geturl())
-            if final_url.scheme != "https" or final_url.hostname != "chatgpt.com":
-                raise ValueError("unexpected Codex reset-card redirect")
-            raw = response.read(_CODEX_RESET_CARDS_MAX_RESPONSE_BYTES + 1)
-        if len(raw) > _CODEX_RESET_CARDS_MAX_RESPONSE_BYTES:
-            raise ValueError("Codex reset-card response is too large")
-        cards = _normalize_codex_reset_cards(json.loads(raw), now_epoch)
-        if cards is None:
-            raise ValueError("invalid Codex reset-card response")
-        state = {
-            "account_key": account_key,
-            "auth_key": auth_key,
-            "fetched_at": now_epoch,
-            "last_attempt_at": now_epoch,
-            "next_attempt_at": _codex_reset_cards_next_attempt(cards, now_epoch),
-            "cards": cards,
-        }
-        _save_codex_reset_cards_state(state)
-        return cards
-    except Exception as exc:
-        status = getattr(exc, "code", None)
-        if status in (401, 403):
-            state["last_error"] = "auth"
-        elif status in (404, 410):
-            state["last_error"] = "unsupported"
-        else:
-            state["last_error"] = "request"
-        state["last_attempt_at"] = now_epoch
-        retry_interval = (
-            _CODEX_RESET_CARDS_REFRESH_INTERVAL
-            if status in (404, 410)
-            else _CODEX_RESET_CARDS_RETRY_INTERVAL
-        )
-        state["next_attempt_at"] = now_epoch + retry_interval
-        _save_codex_reset_cards_state(state)
-        return cached
-
-
-def _codex_event_key(event):
-    if not isinstance(event, list) or len(event) < 11:
-        return None
-    total_values = event[2:6]
-    if not all(value is not None for value in total_values):
-        return None
-    return tuple(event[2:10])
-
-
-# _codex_event_cache_dir imported from core.storage
-
-
-def _codex_event_cache_path(file_path):
-    normalized = os.path.normcase(os.path.realpath(file_path))
-    digest = hashlib.sha256(normalized.encode("utf-8", errors="surrogatepass")).hexdigest()
-    return os.path.join(_codex_event_cache_dir(), f"{digest}.jsonl")
-
-
-def _codex_event_cache_ready(file_path, entry):
-    if not isinstance(entry, dict) or entry.get("event_count") is None:
-        return False
-    try:
-        expected_size = int(entry.get("event_cache_size", -1))
-        return expected_size >= 0 and os.path.getsize(
-            _codex_event_cache_path(file_path)) >= expected_size
-    except (OSError, TypeError, ValueError):
-        return False
-
-
-def _codex_write_event_cache(file_path, events):
-    directory = _codex_event_cache_dir()
-    os.makedirs(directory, mode=0o700, exist_ok=True)
-    try:
-        os.chmod(directory, 0o700)
-    except OSError:
-        pass
-    destination = _codex_event_cache_path(file_path)
-    fd, tmp = _tempfile.mkstemp(prefix=".codex-events-", suffix=".jsonl", dir=directory)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            for event in events:
-                handle.write(json.dumps(event, ensure_ascii=False, separators=(",", ":")))
-                handle.write("\n")
-        os.chmod(tmp, 0o600)
-        os.replace(tmp, destination)
-        return os.path.getsize(destination)
-    except Exception:
-        try:
-            os.unlink(tmp)
-        except OSError:
-            pass
-        raise
-
-
-def _codex_append_event_cache(file_path, events, expected_size):
-    destination = _codex_event_cache_path(file_path)
-    with open(destination, "r+b") as handle:
-        current_size = os.fstat(handle.fileno()).st_size
-        if current_size < expected_size:
-            raise OSError("Codex event cache is shorter than its committed size")
-        handle.truncate(expected_size)
-        handle.seek(expected_size)
-        for event in events:
-            payload = json.dumps(event, ensure_ascii=False, separators=(",", ":"))
-            handle.write(payload.encode("utf-8"))
-            handle.write(b"\n")
-        return handle.tell()
-
-
-def _codex_remove_event_cache(file_path):
-    try:
-        os.remove(_codex_event_cache_path(file_path))
-    except OSError:
-        pass
-
-
-def _codex_clear_event_cache(file_cache):
-    for file_path in list(file_cache):
-        _codex_remove_event_cache(file_path)
-    file_cache.clear()
-
-
-def _iter_codex_cached_events(file_path, start_index=0, limit=None):
-    emitted = 0
-    with open(_codex_event_cache_path(file_path), "r", encoding="utf-8") as handle:
-        for index, line in enumerate(handle):
-            if index < start_index:
-                continue
-            if limit is not None and emitted >= limit:
-                break
-            try:
-                event = json.loads(line)
-            except (TypeError, ValueError):
-                raise OSError("Codex event cache contains invalid JSON")
-            if not isinstance(event, list):
-                raise OSError("Codex event cache contains an invalid event")
-            emitted += 1
-            yield event
-
-
-def _codex_event_metadata(events):
-    keys = []
-    first_ts = None
-    last_ts = None
-    for event in events:
-        if first_ts is None and event:
-            first_ts = str(event[0])
-        if event:
-            last_ts = str(event[0])
-        if len(keys) < 2:
-            key = _codex_event_key(event)
-            if key is not None:
-                keys.append(list(key))
-    return {
-        "event_count": len(events),
-        "first_keys": keys,
-        "first_event_ts": first_ts,
-        "last_event_ts": last_ts,
-    }
-
-
-def _codex_days_from_cached_events(file_path, start_index=0, event_count=None):
-    days = {}
-    limit = None if event_count is None else max(int(event_count) - start_index, 0)
-    for event in _iter_codex_cached_events(
-            file_path, start_index=start_index, limit=limit):
-        _codex_add_event(days, event)
-    return days
-
-
-def _codex_entry_prefix_key(entry):
-    values = entry.get("first_keys") or []
-    if len(values) < 2:
-        return None
-    try:
-        return tuple(values[0]), tuple(values[1])
-    except TypeError:
-        return None
-
-
-def _codex_cached_prefix_match_count(
-        child_path, parent_path, child_count=None, parent_count=None):
-    count = 0
-    child_events = _iter_codex_cached_events(child_path, limit=child_count)
-    parent_events = _iter_codex_cached_events(parent_path, limit=parent_count)
-    for child, parent in zip(child_events, parent_events):
-        child_key = _codex_event_key(child)
-        parent_key = _codex_event_key(parent)
-        if child_key is None or child_key != parent_key:
-            break
-        count += 1
-    return count
-
-
-def _codex_cached_burst_count(file_path, start_index, event_count):
-    burst_second = None
-    count = 0
-    for event in _iter_codex_cached_events(
-            file_path, start_index=start_index,
-            limit=max(int(event_count) - start_index, 0)):
-        if not event:
-            break
-        event_second = str(event[0])[:19]
-        if burst_second is None:
-            burst_second = event_second
-        elif event_second != burst_second:
-            break
-        count += 1
-    return count if count >= 5 else 0
-
-
-def _codex_cached_drop_count(file_path, entry, file_cache):
-    by_sid = {
-        candidate.get("session_id"): (path, candidate)
-        for path, candidate in file_cache.items()
-        if candidate.get("session_id")
-    }
-    event_count = int(entry.get("event_count", 0) or 0)
-    drop_count = 0
-    prefix_open = False
-
-    parent = by_sid.get(entry.get("forked_from_id"))
-    if parent and parent[0] != file_path:
-        drop_count = _codex_cached_prefix_match_count(
-            file_path, parent[0], event_count, parent[1].get("event_count"))
-        prefix_open = drop_count > 0 and drop_count == event_count
-
-    prefix_key = _codex_entry_prefix_key(entry)
-    if drop_count == 0 and prefix_key is not None and event_count >= 2:
-        child_first_ts = str(entry.get("first_event_ts") or "")
-        best = 0
-        for parent_path, parent_entry in file_cache.items():
-            if parent_path == file_path or _codex_entry_prefix_key(parent_entry) != prefix_key:
-                continue
-            parent_first_ts = str(parent_entry.get("first_event_ts") or "")
-            if not parent_first_ts or parent_first_ts >= child_first_ts:
-                continue
-            best = max(best, _codex_cached_prefix_match_count(
-                file_path, parent_path, event_count, parent_entry.get("event_count")))
-        if best >= 2:
-            drop_count = best
-            prefix_open = drop_count == event_count
-
-    burst_count = _codex_cached_burst_count(file_path, drop_count, event_count)
-    if burst_count:
-        drop_count += burst_count
-
-    if event_count < 2 and not entry.get("forked_from_id"):
-        prefix_open = True
-    elif entry.get("forked_from_id") and parent is None:
-        prefix_open = True
-    return min(drop_count, event_count), prefix_open
-
-
-def _codex_migrate_event_cache(file_cache):
-    if not any(isinstance(entry, dict) and "events" in entry for entry in file_cache.values()):
-        return False
-
-    canonical = _codex_canonical_file_cache(file_cache)
-    drops = _codex_replayed_event_indexes(canonical)
-    days_by_file = _codex_deduped_days(canonical)
-    prepared = {}
-    for file_path, entry in file_cache.items():
-        events = entry.get("events") or []
-        cache_size = _codex_write_event_cache(file_path, events)
-        metadata = _codex_event_metadata(events)
-        skipped = drops.get(file_path, set())
-        drop_count = 0
-        while drop_count in skipped:
-            drop_count += 1
-        prepared[file_path] = {
-            **metadata,
-            "event_cache_size": cache_size,
-            "drop_count": drop_count,
-            "dedupe_open": bool(drop_count and drop_count == len(events)),
-            "deduped_days": days_by_file.get(file_path, {}),
-            "canonical": file_path in canonical,
-        }
-
-    for file_path, entry in file_cache.items():
-        entry.update(prepared[file_path])
-        entry["days"] = entry["deduped_days"] if entry["canonical"] else {}
-        entry.pop("events", None)
-    return True
-
-
-def _codex_add_event(days, event):
-    dk = event[1]
-    li, lc, lo, lr, cost = event[6:11]
-    day = days.setdefault(dk, {"in": 0, "cached": 0, "out": 0,
-                               "reason": 0, "cost": 0.0, "models": {}, "hours": [0] * 24})
-    day["in"] += li
-    day["cached"] += lc
-    day["out"] += lo
-    day["reason"] += lr
-    day["cost"] += cost
-    model = event[11] if len(event) > 11 else None
-    _add_model_usage(day["models"], model, max(li - lc, 0), lo, lc, 0, lr, cost)
-    try:
-        hour = datetime.fromisoformat(event[0]).astimezone().hour
-        day["hours"][hour] += li + lo
-    except (TypeError, ValueError):
-        pass
-
-
-def _codex_prefix_match_count(child_events, parent_events):
-    n = 0
-    while n < len(child_events) and n < len(parent_events):
-        child_key = _codex_event_key(child_events[n])
-        parent_key = _codex_event_key(parent_events[n])
-        if child_key is None or child_key != parent_key:
-            break
-        n += 1
-    return n
-
-
-def _codex_replayed_event_indexes(file_cache):
-    by_sid = {}
-    ordered = []
-    for file_path, entry in file_cache.items():
-        events = entry.get("events") or []
-        if events:
-            ordered.append((file_path, entry))
-        sid = entry.get("session_id")
-        if sid:
-            by_sid[sid] = (file_path, entry)
-
-    drops = {}
-    for file_path, entry in ordered:
-        parent = by_sid.get(entry.get("forked_from_id"))
-        if not parent or parent[0] == file_path:
-            continue
-        n = _codex_prefix_match_count(entry.get("events") or [], parent[1].get("events") or [])
-        if n:
-            drops.setdefault(file_path, set()).update(range(n))
-
-    # Some Codex replay files do not carry fork metadata. Only use this
-    # heuristic for longer matching prefixes; a one-event match can be a real
-    # independent session with the same usage numbers.
-    prefix_candidates = {}
-    for file_path, entry in ordered:
-        events = entry.get("events") or []
-        if len(events) < 2:
-            continue
-        first = _codex_event_key(events[0])
-        second = _codex_event_key(events[1])
-        if first is not None and second is not None:
-            prefix_candidates.setdefault((first, second), []).append((file_path, entry))
-
-    for file_path, entry in ordered:
-        if drops.get(file_path):
-            continue
-        child_events = entry.get("events") or []
-        if len(child_events) < 2:
-            continue
-        first = _codex_event_key(child_events[0])
-        second = _codex_event_key(child_events[1])
-        if first is None or second is None:
-            continue
-        child_first_ts = child_events[0][0]
-        best = 0
-        for parent_path, parent_entry in prefix_candidates.get((first, second), []):
-            if parent_path == file_path:
-                continue
-            parent_events = parent_entry.get("events") or []
-            if not parent_events or parent_events[0][0] >= child_first_ts:
-                continue
-            best = max(best, _codex_prefix_match_count(child_events, parent_events))
-        if best >= 2:
-            drops.setdefault(file_path, set()).update(range(best))
-
-    # 兜底:文件开头同一秒内 ≥5 条 token 事件必是回放转储(真实 API 一秒内
-    # 不可能完成 5 次响应)。覆盖从父会话中段(如 compact 后)分叉、
-    # 累计值与父文件开头对不上导致前缀匹配失效的场景。
-    for file_path, entry in ordered:
-        events = entry.get("events") or []
-        if len(events) < 5:
-            continue
-        already = drops.get(file_path, set())
-        start = 0
-        while start in already:
-            start += 1
-        if start + 4 >= len(events):
-            continue
-        first_ev = events[start]
-        if not isinstance(first_ev, list) or not first_ev:
-            continue
-        burst_sec = str(first_ev[0])[:19]
-        n = start
-        while n < len(events):
-            ev = events[n]
-            if not isinstance(ev, list) or not ev or str(ev[0])[:19] != burst_sec:
-                break
-            n += 1
-        if n - start >= 5:
-            drops.setdefault(file_path, set()).update(range(start, n))
-    return drops
-
-
-def _codex_deduped_days(file_cache):
-    """Return per-file daily usage after removing copied rollout prefixes."""
-    drops = _codex_replayed_event_indexes(file_cache)
-    days_by_file = {}
-    for file_path, entry in file_cache.items():
-        skip = drops.get(file_path, set())
-        for event_index, event in enumerate(entry.get("events", [])):
-            if event_index in skip or _codex_event_key(event) is None:
-                if event_index in skip:
-                    continue
-                if not isinstance(event, list) or len(event) < 11:
-                    continue
-            _codex_add_event(days_by_file.setdefault(file_path, {}), event)
-    return days_by_file
+# Re-export live limits and reset cards from codex_limits
+from core.collectors.codex_limits import (
+    _CODEX_QUOTA_TTL,
+    _CODEX_QUOTA_FALLBACK_TTL,
+    _CODEX_USAGE_URL,
+    _CODEX_USAGE_MAX_RESPONSE_BYTES,
+    _CODEX_RESET_CARDS_URL,
+    _CODEX_RESET_CARDS_REFRESH_INTERVAL,
+    _CODEX_RESET_CARDS_RETRY_INTERVAL,
+    _CODEX_RESET_CARDS_MAX_RESPONSE_BYTES,
+    _window_from_codex_live,
+    _codex_live_to_limits,
+    _codex_limits_have_active_window,
+    _cached_codex_live_limits,
+    _codex_live_snapshot_is_current,
+    _decode_jwt_claims,
+    _codex_config,
+    _codex_is_custom_provider,
+    _codex_auth_context,
+    fetch_codex_live_limits,
+    _normalize_codex_reset_cards,
+    _cached_codex_reset_cards,
+    _codex_reset_cards_next_attempt,
+    _save_codex_reset_cards_state,
+    fetch_codex_reset_cards,
+)
+
+# Re-export event disk cache, deduplication, and replay from codex_cache
+from core.collectors.codex_cache import (
+    _codex_event_key,
+    _codex_event_cache_path,
+    _codex_event_cache_ready,
+    _codex_write_event_cache,
+    _codex_append_event_cache,
+    _codex_remove_event_cache,
+    _codex_clear_event_cache,
+    _iter_codex_cached_events,
+    _codex_event_metadata,
+    _codex_days_from_cached_events,
+    _codex_entry_prefix_key,
+    _codex_cached_prefix_match_count,
+    _codex_cached_burst_count,
+    _codex_cached_drop_count,
+    _codex_canonical_file_cache,
+    _codex_add_event,
+    _codex_prefix_match_count,
+    _codex_replayed_event_indexes,
+    _codex_deduped_days,
+    _codex_migrate_event_cache,
+)
 
 
 _CODEX_MODEL_RECORD_TYPES = {"turn_context", "session_meta"}
@@ -1144,38 +396,6 @@ def _codex_rollout_files():
                 seen.add(key)
                 files.append(real)
     return files
-
-
-def _codex_canonical_file_cache(file_cache):
-    """Choose one complete physical copy for each logical Codex session."""
-    canonical = {}
-    selected = {}
-    for file_path, entry in file_cache.items():
-        if not isinstance(entry, dict):
-            continue
-        session_id = entry.get("session_id")
-        logical_id = ("session", str(session_id)) if session_id else (
-            "rollout", os.path.basename(file_path))
-        events = entry.get("events") or []
-        events = events if isinstance(events, list) else []
-        event_count = int(entry.get("event_count", len(events)) or 0)
-        event_timestamps = [str(event[0]) for event in events
-                            if isinstance(event, list) and event]
-        last_event_ts = str(entry.get("last_event_ts") or
-                            max(event_timestamps, default=""))
-        try:
-            parsed_size = int(entry.get("parsed_size", 0) or 0)
-        except (TypeError, ValueError):
-            parsed_size = 0
-        score = (event_count, last_event_ts, parsed_size)
-        previous = selected.get(logical_id)
-        if previous is not None and score <= previous[0]:
-            continue
-        if previous is not None:
-            canonical.pop(previous[1], None)
-        selected[logical_id] = (score, file_path)
-        canonical[file_path] = entry
-    return canonical
 
 
 def scan_codex(bounds, cache, rollout_files=None):
@@ -1601,3 +821,66 @@ def _codex_quota_values(limits, now_epoch=None, consumed=None):
             values[f"{pct_key}_stale"] = True
     return values
 
+
+__all__ = [
+    # Live limits & reset cards (re-exported from codex_limits)
+    "_CODEX_QUOTA_TTL",
+    "_CODEX_QUOTA_FALLBACK_TTL",
+    "_CODEX_USAGE_URL",
+    "_CODEX_USAGE_MAX_RESPONSE_BYTES",
+    "_CODEX_RESET_CARDS_URL",
+    "_CODEX_RESET_CARDS_REFRESH_INTERVAL",
+    "_CODEX_RESET_CARDS_RETRY_INTERVAL",
+    "_CODEX_RESET_CARDS_MAX_RESPONSE_BYTES",
+    "_window_from_codex_live",
+    "_codex_live_to_limits",
+    "_codex_limits_have_active_window",
+    "_cached_codex_live_limits",
+    "_codex_live_snapshot_is_current",
+    "_decode_jwt_claims",
+    "_codex_config",
+    "_codex_is_custom_provider",
+    "_codex_auth_context",
+    "fetch_codex_live_limits",
+    "_normalize_codex_reset_cards",
+    "_cached_codex_reset_cards",
+    "_codex_reset_cards_next_attempt",
+    "_save_codex_reset_cards_state",
+    "fetch_codex_reset_cards",
+    # Event cache & deduplication (re-exported from codex_cache)
+    "_codex_event_key",
+    "_codex_event_cache_dir",
+    "_codex_event_cache_path",
+    "_codex_event_cache_ready",
+    "_codex_write_event_cache",
+    "_codex_append_event_cache",
+    "_codex_remove_event_cache",
+    "_codex_clear_event_cache",
+    "_iter_codex_cached_events",
+    "_codex_event_metadata",
+    "_codex_days_from_cached_events",
+    "_codex_entry_prefix_key",
+    "_codex_cached_prefix_match_count",
+    "_codex_cached_burst_count",
+    "_codex_cached_drop_count",
+    "_codex_canonical_file_cache",
+    "_codex_add_event",
+    "_codex_prefix_match_count",
+    "_codex_replayed_event_indexes",
+    "_codex_deduped_days",
+    "_codex_migrate_event_cache",
+    # Scanner & session parsing
+    "_CODEX_MODEL_RECORD_TYPES",
+    "_CODEX_USAGE_RECORD_MARKERS",
+    "_codex_decode_json_string",
+    "_codex_probe_record_header",
+    "_iter_codex_usage_records",
+    "_codex_complete_offset",
+    "_codex_offset_guard",
+    "_iter_codex_token_lines",
+    "_codex_session_meta",
+    "_codex_rollout_files",
+    "scan_codex",
+    "_codex_used_since",
+    "_codex_quota_values",
+]
