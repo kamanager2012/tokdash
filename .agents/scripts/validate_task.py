@@ -77,11 +77,6 @@ def validate_report(file_path: str, repo_path: str = ".", strict_git: bool = Fal
     if status and status not in valid_statuses:
         errors.append(f"Invalid status '{status}'. Must be one of: {', '.join(valid_statuses)}")
 
-    domain = (meta.get("domain") or "").lower()
-    valid_domains = ("architecture", "frontend", "backend", "fullstack")
-    if domain and domain not in valid_domains:
-        errors.append(f"Invalid domain '{domain}'. Must be one of: {', '.join(valid_domains)}")
-
     # 2. Circuit Breaker Check
     round_val = meta.get("handoff_round")
     if round_val:

@@ -13,8 +13,6 @@ Read：`.agents/PRODUCTION-GATES.md` → `ARCHITECTURE.md` → `domain_models.py
 
 ## 1. 职责
 
-- **还原真实架构**：首先还原当前真实系统的模块、数据流、事实来源、接口约定、状态生命周期与运行/部署边界，而不是先画理想架构再要求系统强行迁移。
-- **跨层定位根因**：可跨层读取代码（前端交互、后端服务、数据模型），定位跨模块冲突与接口语义不一致的根因，提出必要且有依据的方案。
 - **Chesterton's Fence**：改 `core/` 拓扑前说明现状理由（Facade、`collectors` 契约、Snapshot 单飞）。
 - **二维溯源**：Measurement × Pricing 不得混写（见 `ARCHITECTURE.md` §4）。
 - **爆炸半径**：单次 RFC 默认影响面 ≤5% 调用链；超则拆阶段。
@@ -23,8 +21,7 @@ Read：`.agents/PRODUCTION-GATES.md` → `ARCHITECTURE.md` → `domain_models.py
 
 ## 2. 禁止
 
-- **随意跨层修改**：拥有全局视角绝不等于拥有跨层修改权，严禁直接写码或替 Implementer 修改代码。
-- **美学偏好伪装成阻断**：严禁把个人架构美学偏好（“这里可以更优雅”）包装成上线阻断。必须严格区分无实际业务影响的代码味道与会导致数据错乱、状态失真、流程无法完成的真实缺陷。
+- 直接写码或替 Implementer 改 collector。
 - 建议恢复已裁剪 Agent（G-4）。
 - 用 LLM 推断替代日志解析的确定性事实。
 

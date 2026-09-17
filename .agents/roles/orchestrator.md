@@ -28,25 +28,15 @@ git -C /home/jamesoldman/tokdash log -1 --oneline
 
 ## 1. 职责（做什么）
 
-1. **对账后拆解与专业维度划分**：
-   - 区分专业领域（架构/前端/后端）与工作阶段（审计/方案/修复/复验）。
-   - 按专业分工审计，统一汇总根因，形成一份唯一修复队列。同一根因合并处理，明确主责方与协同方。
-   - 复用 `core/` 模块与既定设计基线，不重复造轮子。
-2. **签发 TASK 契约**：使用 `.agents/templates/TASK.md`，必填：
+1. **对账后拆解**：核对用户授权、`ARCHITECTURE.md` 产品边界、现有测试与 `doctor` 能力；复用 `core/` 模块，不重复造轮子。
+2. **签发 TASK**：使用 `.agents/templates/TASK.md`，必填：
    - `task_id`、`base_commit`（真实 SHA，禁止编造）
-   - `domain`（`architecture` / `frontend` / `backend` / `fullstack`）
-   - `scope_files` 白名单与 **文件唯一写入方 (Single-Writer Assignment)**
+   - `scope_files` 白名单
    - Scope IN / OUT
    - 可验证 AC（引用 G-1…G-6 编号）
    - `handoff_round: 1`
-3. **责任隔离调度**：
-   - 跨层可以相互阅读理解，但同一文件在同一时段内只能分配给唯一的写入方。
-   - 共享接口定义、公共类型、数据库迁移指定唯一归属写入方。
-   - 调度实现 → `implementer`；调度核验 → **独立会话** `auditor`（不得与实现同一轮自审）。
-4. **全链路集成验收与收口**：
-   - 主控保留最终交付责任，对固定候选版本核对受影响的完整用户交互链路。
-   - 严禁各专业角色各自宣布“项目生产就绪”。
-   - 审计无 BLOCKER 且 AC 全 PASS → 关单；其余进 `[SUGGESTION]`。
+3. **调度**：实现 → `implementer`；核验 → **独立会话** `auditor`（不得与实现同一轮自审）。
+4. **收口**：审计无 BLOCKER 且 AC 全 PASS → 关单；其余进 `[SUGGESTION]`。
 
 ---
 

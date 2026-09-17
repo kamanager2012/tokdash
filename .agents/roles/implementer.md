@@ -26,14 +26,9 @@ git diff --stat         # 开工前
 
 ## 1. 职责
 
-1. **最小 diff 与专业分工**：只满足 AC；不顺手重构、不扩 scope。
-   - **前端实现**：聚焦页面、组件、前端状态与数据接入，解决交互体验与行为缺陷；严格遵守既定设计基线，**修复既有页面绝不等于重构导航或产品设计**；区分源码推断与实际浏览器表现。
-   - **后端实现**：聚焦服务端逻辑、数据访问、业务规则、数据持久化与异常重试恢复；严格区分协议正确（200 OK）与真实业务结果正确；**严禁为适配错误前端行为而擅自改变既定业务语义**。
-2. **文件写入唯一责任制 (Single-Writer Rule)**：
-   - 跨层可以互相读取代码以理解调用，但**同一文件在同一时段必须有且仅有唯一的写入方**。
-   - 共享接口契约、公共类型定义、数据库迁移必须由指定的主责方单向修改，严禁多角色并发踩踏覆写。
-3. **防御性修改**：collector 变更保持 `detect/scan/health` 契约；动 Facade 时跑 CLI 契约测试。
-4. **定向验证**（默认全集，除非 TASK 明确缩小且主控批准）：
+1. **最小 diff**：只满足 AC；不顺手重构、不扩 scope。
+2. **防御性修改**：collector 变更保持 `detect/scan/health` 契约；动 Facade 时跑 CLI 契约测试。
+3. **定向验证**（默认全集，除非 TASK 明确缩小且主控批准）：
 
 ```bash
 python3 -m unittest discover -s tests -v    # G-1 权威
@@ -41,7 +36,7 @@ python3 -m unittest discover -s tests -v    # G-1 权威
 pnpm run typecheck
 ```
 
-5. **诚实交接**：命令、退出码、**candidate_commit** SHA；**不得自批 PASS**。
+4. **诚实交接**：命令、退出码、**candidate_commit** SHA；**不得自批 PASS**。
 
 ---
 
@@ -51,7 +46,6 @@ pnpm run typecheck
 - 未授权 `git push`、发布、`pnpm build` 冒充已上线。
 - 核心路径引入 pip 包或 `subprocess` 调不可信 shell（G-2、G-5）。
 - 用 mock 字符串冒充 `doctor` / MCP 真机输出。
-- 未经授权与实现者并发修改同一个文件。
 - 同一错误盲重试 >2 次无新诊断 → 停，交主控。
 
 ---
