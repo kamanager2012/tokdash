@@ -163,6 +163,16 @@ class TestCliContracts(unittest.TestCase):
         for key in ("name", "installed", "readable", "files", "status"):
             self.assertIn(key, first_agent)
 
+    def test_cli_default_menubar_contract(self):
+        """验证无任何 CLI 参数时的 BitBar / SwiftBar / xbar 菜单渲染契约与防御性。"""
+        res = self.run_cli()
+        self.assertEqual(res.returncode, 0, f"default menubar invocation failed: {res.stderr}")
+        self.assertIn("---", res.stdout, "Menubar output must contain section separator '---'")
+        self.assertIn("Claude Code", res.stdout, "Must include Claude Code block")
+        self.assertIn("Codex", res.stdout, "Must include Codex block")
+        self.assertNotIn("Traceback", res.stderr, "Stderr must have no unhandled traceback")
+        self.assertNotIn("KeyError", res.stderr, "Must not throw KeyError for missing or pruned tools")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -64,7 +64,7 @@ Antigravity 子代理薄壳（正文仍以 `roles/` 为准）：
 
 ## 4. 关键硬门禁（摘要 → 详情见 PRODUCTION-GATES）
 
-1. **G-1**：43 项测试 — `python3 -m unittest discover -s tests -v` 退出码 0。
+1. **G-1**：44 项测试 — `python3 -m unittest discover -s tests -v` 退出码 0。
 2. **G-2**：采集/计费核心仅标准库，无未授权 pip。
 3. **G-3**：`usage.30s.py` Facade 与 CLI/IPC 契约不破。
 4. **G-4**：14 Agent 产品边界；MCP 只读。

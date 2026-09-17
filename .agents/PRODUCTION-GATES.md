@@ -10,11 +10,11 @@
 | 项 | 规范 |
 |----|------|
 | **权威命令** | `python3 -m unittest discover -s tests -v`（退出码 0） |
-| **等价命令** | `pnpm test` / `pytest -q`（须与 unittest 同 43 项，不得少测） |
-| **当前计数** | **43** 项（变更后若增减须同步改 `AGENTS.md` 与本节） |
+| **等价命令** | `pnpm test` / `pytest -q`（须与 unittest 同 44 项，不得少测） |
+| **当前计数** | **44** 项（变更后若增减须同步改 `AGENTS.md` 与本节） |
 | **前端** | 触及 `src/` 或 `electron/` 时额外：`pnpm run typecheck`；发布级另需 `pnpm build`（仅 Release 角色或 AC 明确要求） |
 
-**反例**：`43 passed` **不等于**「14 款 Agent 真机对账已签收」；后者需 `cognitally --doctor` 或工单 AC 单独约定。
+**反例**：`44 passed` **不等于**「14 款 Agent 真机对账已签收」；后者需 `cognitally --doctor` 或工单 AC 单独约定。
 
 ---
 

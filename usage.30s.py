@@ -623,68 +623,68 @@ def main():
     print(f"  (成本按 API 价估,订阅实付不按此) | font=Menlo size=11")
     print("---")
     # Pi 块
-    pt = d["pi"]["ranges"]["today"]
-    if pt["sessions"] > 0:
+    pt = d.get("pi", {}).get("ranges", {}).get("today", {})
+    if pt.get("sessions", 0) > 0 or pt.get("in", 0) > 0:
         print(f"Pi Coding Agent {HEAD}")
-        print(f"命中率   {pt['hit']:5.1f}% {F}")
-        print(f"今日 输入   {human(pt['in']):>6} {F}")
-        print(f"今日 输出   {human(pt['out']):>6} {F}")
-        print(f"今日 缓存读 {human(pt['cr']):>6} {F}")
-        print(f"今日 缓存写 {human(pt['cw']):>6} {F}")
-        print(f"今日 ≈成本  ${pt['cost']:.2f} {F}")
+        print(f"命中率   {pt.get('hit', 0):5.1f}% {F}")
+        print(f"今日 输入   {human(pt.get('in', 0)):>6} {F}")
+        print(f"今日 输出   {human(pt.get('out', 0)):>6} {F}")
+        print(f"今日 缓存读 {human(pt.get('cr', 0)):>6} {F}")
+        print(f"今日 缓存写 {human(pt.get('cw', 0)):>6} {F}")
+        print(f"今日 ≈成本  ${pt.get('cost', 0):.2f} {F}")
         print("---")
     # WorkBuddy 块
-    wt = d["workbuddy"]["ranges"]["today"]
-    if wt["sessions"] > 0:
+    wt = d.get("workbuddy", {}).get("ranges", {}).get("today", {})
+    if wt.get("sessions", 0) > 0 or wt.get("in", 0) > 0:
         print(f"WorkBuddy {HEAD}")
-        print(f"命中率   {wt['hit']:5.1f}% {F}")
-        print(f"今日 输入   {human(wt['in']):>6} {F}")
-        print(f"今日 输出   {human(wt['out']):>6} {F}")
-        print(f"今日 缓存读 {human(wt['cr']):>6} {F}")
-        print(f"今日 ≈成本  ${wt['cost']:.2f} {F}")
+        print(f"命中率   {wt.get('hit', 0):5.1f}% {F}")
+        print(f"今日 输入   {human(wt.get('in', 0)):>6} {F}")
+        print(f"今日 输出   {human(wt.get('out', 0)):>6} {F}")
+        print(f"今日 缓存读 {human(wt.get('cr', 0)):>6} {F}")
+        print(f"今日 ≈成本  ${wt.get('cost', 0):.2f} {F}")
         print("---")
     # WorkBuddy AI 国际版块
-    wat = d["workbuddy_ai"]["ranges"]["today"]
-    if wat["sessions"] > 0:
+    wat = d.get("workbuddy_ai", {}).get("ranges", {}).get("today", {})
+    if wat.get("sessions", 0) > 0 or wat.get("in", 0) > 0:
         print(f"WorkBuddy Intl. {HEAD}")
-        print(f"命中率   {wat['hit']:5.1f}% {F}")
-        print(f"今日 输入   {human(wat['in']):>6} {F}")
-        print(f"今日 输出   {human(wat['out']):>6} {F}")
-        print(f"今日 缓存读 {human(wat['cr']):>6} {F}")
-        print(f"今日 ≈成本  ${wat['cost']:.2f} {F}")
+        print(f"命中率   {wat.get('hit', 0):5.1f}% {F}")
+        print(f"今日 输入   {human(wat.get('in', 0)):>6} {F}")
+        print(f"今日 输出   {human(wat.get('out', 0)):>6} {F}")
+        print(f"今日 缓存读 {human(wat.get('cr', 0)):>6} {F}")
+        print(f"今日 ≈成本  ${wat.get('cost', 0):.2f} {F}")
         print("---")
     # DeepSeek Harness 块
-    dt = d["deepseek_harness"]["ranges"]["today"]
-    if dt["sessions"] > 0:
+    dt = d.get("deepseek_harness", {}).get("ranges", {}).get("today", {})
+    if dt.get("sessions", 0) > 0 or dt.get("in", 0) > 0:
         print(f"DeepSeek Harness {HEAD}")
-        print(f"命中率   {dt['hit']:5.1f}% {F}")
-        print(f"今日 输入   {human(dt['in']):>6} {F}")
-        print(f"今日 输出   {human(dt['out']):>6} {F}")
-        print(f"今日 缓存读 {human(dt['cr']):>6} {F}")
+        print(f"命中率   {dt.get('hit', 0):5.1f}% {F}")
+        print(f"今日 输入   {human(dt.get('in', 0)):>6} {F}")
+        print(f"今日 输出   {human(dt.get('out', 0)):>6} {F}")
+        print(f"今日 缓存读 {human(dt.get('cr', 0)):>6} {F}")
         if dt.get("reason"):
             print(f"今日 推理   {human(dt['reason']):>6} {F}")
-        print(f"今日 ≈成本  ${dt['cost']:.2f} {F}")
+        print(f"今日 ≈成本  ${dt.get('cost', 0):.2f} {F}")
         print("---")
-    # Qwen Code 块
-    qt = d["qwencode"]["ranges"]["today"]
-    if qt["sessions"] > 0:
-        print(f"Qwen Code {HEAD}")
-        print(f"命中率   {qt['hit']:5.1f}% {F}")
-        print(f"今日 输入   {human(qt['in']):>6} {F}")
-        print(f"今日 输出   {human(qt['out']):>6} {F}")
-        print(f"今日 缓存读 {human(qt['cr']):>6} {F}")
-        if qt.get("reason"):
-            print(f"今日 思考   {human(qt['reason']):>6} {F}")
-        print(f"今日 ≈成本  ${qt['cost']:.2f} {F}")
+    # GLM Code (ZCode) 块
+    zt = d.get("zcode", {}).get("ranges", {}).get("today", {})
+    if zt.get("sessions", 0) > 0 or zt.get("in", 0) > 0:
+        print(f"GLM Code (ZCode) {HEAD}")
+        print(f"命中率   {zt.get('hit', 0):5.1f}% {F}")
+        print(f"今日 输入   {human(zt.get('in', 0)):>6} {F}")
+        print(f"今日 输出   {human(zt.get('out', 0)):>6} {F}")
+        print(f"今日 缓存读 {human(zt.get('cr', 0)):>6} {F}")
+        if zt.get("reason"):
+            print(f"今日 推理   {human(zt['reason']):>6} {F}")
+        print(f"今日 ≈成本  ${zt.get('cost', 0):.2f} {F}")
         print("---")
     # Kimi Code 块（protocol 1.5 提供模型，但 wire 不持久化实际成本）
-    kt = d["kimicode"]["ranges"]["today"]
-    if kt["sessions"] > 0:
+    kt = d.get("kimicode", {}).get("ranges", {}).get("today", {})
+    if kt.get("sessions", 0) > 0 or kt.get("in", 0) > 0:
         print(f"Kimi Code {HEAD}")
-        print(f"命中率   {kt['hit']:5.1f}% {F}")
-        print(f"今日 输入   {human(kt['in']):>6} {F}")
-        print(f"今日 输出   {human(kt['out']):>6} {F}")
-        print(f"今日 缓存读 {human(kt['cr']):>6} {F}")
+        print(f"命中率   {kt.get('hit', 0):5.1f}% {F}")
+        print(f"今日 输入   {human(kt.get('in', 0)):>6} {F}")
+        print(f"今日 输出   {human(kt.get('out', 0)):>6} {F}")
+        print(f"今日 缓存读 {human(kt.get('cr', 0)):>6} {F}")
         if kt.get("cw"):
             print(f"今日 缓存写 {human(kt['cw']):>6} {F}")
         print("---")
