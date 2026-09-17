@@ -244,6 +244,12 @@ _SCAN_CACHE_DIR = (
 _DEFAULT_SCAN_CACHE_FILE = os.path.join(_SCAN_CACHE_DIR, "scan_cache.json")
 _SCAN_CACHE_FILE = _DEFAULT_SCAN_CACHE_FILE
 
+_GEMINI_DAYS_CACHE_KEY = "_gemini_dashboard_days"
+_GROK_DAYS_CACHE_KEY = "_grok_dashboard_days"
+_CURSOR_PROVIDER_DAYS_CACHE_KEY = "_cursor_provider_days"
+_ZAI_PROVIDER_DAYS_CACHE_KEY = "_zai_provider_days"
+_GROK_BOT_PROVIDER_DAYS_CACHE_KEY = "_grok_bot_provider_days"
+
 _SNAPSHOT_CACHE_FILE = os.path.join(_SCAN_CACHE_DIR, "canonical_snapshot.json")
 _SNAPSHOT_LOCK_FILE = os.path.join(_SCAN_CACHE_DIR, "canonical_snapshot.lock")
 _SNAPSHOT_TTL = 5.0
