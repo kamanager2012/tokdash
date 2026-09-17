@@ -15,15 +15,14 @@ from core.config import (
 )
 from core.pricing import nice_model
 
+from core.storage import _load_scan_cache
+
 _PROVIDERS = {
-    "load_scan_cache": None,
     "compute": None,
 }
 
 
-def register_projects_providers(load_scan_cache=None, compute=None):
-    if load_scan_cache:
-        _PROVIDERS["load_scan_cache"] = load_scan_cache
+def register_projects_providers(load_scan_cache=None, compute=None, **kwargs):
     if compute:
         _PROVIDERS["compute"] = compute
 
@@ -34,8 +33,6 @@ def _resolve_provider(name):
         return cb
     for mod_name in ("usage_30s", "usage_module", "__main__"):
         mod = sys.modules.get(mod_name)
-        if mod and hasattr(mod, f"_{name}"):
-            return getattr(mod, f"_{name}")
         if mod and hasattr(mod, name):
             return getattr(mod, name)
     return lambda *args, **kwargs: {}

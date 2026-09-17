@@ -27,19 +27,15 @@ from core.pricing import (
 
 _PROVIDER_USAGE_FIELDS = ("in", "out", "cr", "cw", "reason")
 
+from core.storage import _load_scan_cache, _load_ledger, _load_dashboard_cache
+
 _PROVIDERS = {
-    "load_scan_cache": None,
-    "load_ledger": None,
     "compute": None,
 }
 
 
-def register_daily_cost_providers(load_scan_cache=None, load_ledger=None, compute=None):
-    """Register data provider callbacks for disk cache and ledger access."""
-    if load_scan_cache:
-        _PROVIDERS["load_scan_cache"] = load_scan_cache
-    if load_ledger:
-        _PROVIDERS["load_ledger"] = load_ledger
+def register_daily_cost_providers(load_scan_cache=None, load_ledger=None, compute=None, **kwargs):
+    """Register data provider callbacks."""
     if compute:
         _PROVIDERS["compute"] = compute
 
@@ -50,8 +46,6 @@ def _resolve_provider(name):
         return cb
     for mod_name in ("usage_30s", "usage_module", "__main__"):
         mod = sys.modules.get(mod_name)
-        if mod and hasattr(mod, f"_{name}"):
-            return getattr(mod, f"_{name}")
         if mod and hasattr(mod, name):
             return getattr(mod, name)
     return lambda *args, **kwargs: {}

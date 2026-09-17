@@ -117,6 +117,11 @@ from core.config import (
     GROK_QUOTA_CACHE,
     PROVIDER_QUOTA_CACHE,
     ANTIGRAVITY_SCAN_CACHE,
+    _GEMINI_DAYS_CACHE_KEY,
+    _GROK_DAYS_CACHE_KEY,
+    _CURSOR_PROVIDER_DAYS_CACHE_KEY,
+    _ZAI_PROVIDER_DAYS_CACHE_KEY,
+    _GROK_BOT_PROVIDER_DAYS_CACHE_KEY,
     # Ranges & tokens
     RANGE_KEYS,
     TOKEN_FIELDS,
@@ -198,426 +203,43 @@ from core.accounting import (
     _detect_local_servers,
     register_projects_providers,
 )
-_SCAN_CACHE_VERSION = 21
-_SCAN_CACHE_MIGRATABLE_VERSION = 19
-_CODEX_EVENT_CACHE_SUFFIX = ".codex-events"
-_CODEX_PARSER_VERSION = 3
-_CODEX_SCAN_CHECKPOINT_INTERVAL = 5.0
-_GEMINI_DAYS_CACHE_KEY = "_gemini_dashboard_days"
-_GROK_DAYS_CACHE_KEY = "_grok_dashboard_days"
-_CURSOR_PROVIDER_DAYS_CACHE_KEY = "_cursor_provider_days"
-_ZAI_PROVIDER_DAYS_CACHE_KEY = "_zai_provider_days"
-_GROK_BOT_PROVIDER_DAYS_CACHE_KEY = "_grok_bot_provider_days"
-
-
-def _remove_codex_event_cache_dir():
-    import shutil
-    shutil.rmtree(f"{_SCAN_CACHE_FILE}{_CODEX_EVENT_CACHE_SUFFIX}", ignore_errors=True)
-
-
-def _migrate_legacy_scan_cache():
-    if (_SCAN_CACHE_FILE != _DEFAULT_SCAN_CACHE_FILE
-            or os.path.exists(_SCAN_CACHE_FILE)):
-        return
-
-    source_file = None
-    if os.path.isfile(_PREV_TOKEI_CACHE_FILE):
-        source_file = _PREV_TOKEI_CACHE_FILE
-    elif os.path.isfile(_LEGACY_SCAN_CACHE_FILE):
-        source_file = _LEGACY_SCAN_CACHE_FILE
-    else:
-        return
-
-    import shutil
-    directory = os.path.dirname(_SCAN_CACHE_FILE)
-    os.makedirs(directory, mode=0o700, exist_ok=True)
-    try:
-        os.chmod(directory, 0o700)
-    except OSError:
-        pass
-
-    fd, tmp = _tempfile.mkstemp(prefix=".scan-cache-", suffix=".json", dir=directory)
-    try:
-        os.close(fd)
-        shutil.copyfile(source_file, tmp)
-        os.chmod(tmp, 0o600)
-        legacy_events = f"{source_file}{_CODEX_EVENT_CACHE_SUFFIX}"
-        current_events = _codex_event_cache_dir()
-        if os.path.isdir(legacy_events) and not os.path.exists(current_events):
-            shutil.copytree(legacy_events, current_events)
-            try:
-                os.chmod(current_events, 0o700)
-            except OSError:
-                pass
-        os.replace(tmp, _SCAN_CACHE_FILE)
-    except Exception:
-        try:
-            os.unlink(tmp)
-        except OSError:
-            pass
-
-
-def _load_scan_cache():
-    _migrate_legacy_scan_cache()
-    try:
-        with open(_SCAN_CACHE_FILE, "r") as f:
-            c = json.load(f)
-        version = c.get("v")
-        if version not in (_SCAN_CACHE_VERSION, _SCAN_CACHE_MIGRATABLE_VERSION):
-            _remove_codex_event_cache_dir()
-            return {"v": _SCAN_CACHE_VERSION, "_dirty": True}
-        if version == _SCAN_CACHE_MIGRATABLE_VERSION:
-            c["v"] = _SCAN_CACHE_VERSION
-            c["_dirty"] = True
-        else:
-            c["_dirty"] = False
-        c["_keys"] = {k for k in c if not k.startswith("_")}
-        return c
-    except Exception:
-        _remove_codex_event_cache_dir()
-        return {"v": _SCAN_CACHE_VERSION, "_dirty": True}
-
-
-def _save_scan_cache(cache):
-    prev_keys = cache.pop("_keys", set())
-    current_keys = {k for k in cache if not k.startswith("_")}
-    dirty = cache.pop("_dirty", False) or current_keys != prev_keys
-    if not dirty:
-        return
-    cache["v"] = _SCAN_CACHE_VERSION
-    tmp = None
-    try:
-        directory = os.path.dirname(_SCAN_CACHE_FILE)
-        if directory:
-            os.makedirs(directory, mode=0o700, exist_ok=True)
-            try:
-                os.chmod(directory, 0o700)
-            except OSError:
-                pass
-        fd, tmp = _tempfile.mkstemp(prefix="_tokei_scan_cache.", suffix=".json",
-                                    dir=directory or None)
-        payload = json.dumps(cache, separators=(',', ':')).encode("utf-8")
-        with os.fdopen(fd, "wb") as f:
-            f.write(payload)
-        os.chmod(tmp, 0o600)
-        os.replace(tmp, _SCAN_CACHE_FILE)
-    except Exception:
-        if tmp:
-            try:
-                os.unlink(tmp)
-            except OSError:
-                pass
-        pass
-
-
-# ---------- 持久账本(每日高水位) ----------
-# 目的:CLI(如 Claude Code 默认 30 天清理)删除旧日志后,历史用量不再缩水。
-# 语义:现存日志实时计算为准;某天实时值低于账本(=日志被清)时,用账本兜底。
-# 独立于 scan cache 的版本机制,永不因解析器/缓存升级而失效。
-_LEDGER_FILE = (
-    os.environ.get("COGNITALLY_LEDGER_FILE")
-    or os.environ.get("TOKDASH_LEDGER_FILE")
-    or os.environ.get("TOKEI_LEDGER_FILE")
-    or os.path.join(_USER_DIR, "ledger.json")
+from core.storage import (
+    _SCAN_CACHE_VERSION,
+    _SCAN_CACHE_MIGRATABLE_VERSION,
+    _CODEX_EVENT_CACHE_SUFFIX,
+    _CODEX_PARSER_VERSION,
+    _CODEX_SCAN_CHECKPOINT_INTERVAL,
+    _codex_event_cache_dir,
+    _remove_codex_event_cache_dir,
+    _migrate_legacy_scan_cache,
+    _load_scan_cache,
+    _save_scan_cache,
+    _load_dashboard_cache,
+    _LEDGER_FILE,
+    _LEDGER_VERSION,
+    _LEDGER_FIELDS,
+    _LEDGER_CACHE,
+    _load_tokei_config,
+    _load_ledger,
+    _load_ledger_from_disk,
+    ledger_flush,
+    _save_ledger,
+    _ledger_day_total,
+    _ledger_cost_version,
+    _ledger_token_sum,
+    ledger_reconcile,
+    ledger_touch,
+    _with_scan_cache_lock,
+    _cache_dashboard_days,
+    _merge_dashboard_days,
+    _iter_cached_token_days,
+    _add_model_usage,
+    _add_token_usage,
+    _merge_token_day,
+    _merge_live_token_day,
+    _format_token_models,
+    _safe_scan,
 )
-_LEDGER_VERSION = 1
-_LEDGER_FIELDS = ("in", "out", "cr", "cw", "reason", "cached", "cost")
-
-
-_LEDGER_CACHE = {"data": None, "dirty": False}
-
-
-def _load_ledger():
-    if _LEDGER_CACHE["data"] is not None:
-        return _LEDGER_CACHE["data"]
-    _LEDGER_CACHE["data"] = _load_ledger_from_disk()
-    return _LEDGER_CACHE["data"]
-
-
-def _load_ledger_from_disk():
-    try:
-        with open(_LEDGER_FILE, "r") as f:
-            ledger = json.load(f)
-        if isinstance(ledger, dict) and ledger.get("v") == _LEDGER_VERSION:
-            return ledger
-    except (OSError, json.JSONDecodeError, ValueError):
-        pass
-    # 自愈:本地账本缺失/损坏时,从同步仓中本机快照的 _ledger 备份恢复
-    try:
-        cfg = _load_tokei_config() or {}
-        device = (cfg.get("device_id") or "").strip()
-        sync_dir = (cfg.get("sync_dir") or "").strip()
-        if device and sync_dir:
-            snap_path = os.path.join(os.path.expanduser(sync_dir), f"{device}.json")
-            with open(snap_path, "r") as f:
-                backup = json.load(f).get("_ledger")
-            if (isinstance(backup, dict) and backup.get("v") == _LEDGER_VERSION
-                    and backup.get("tools")):
-                _save_ledger(backup)
-                return backup
-    except Exception:
-        pass
-    return {"v": _LEDGER_VERSION, "tools": {}}
-
-
-def ledger_flush():
-    """把内存账本变更落盘:短锁内与磁盘最新状态做天级高水位合并后原子写。
-    每轮扫描只调一次,替代此前每工具一次的 15 轮锁+读+写(性能回归根因)。"""
-    if not _LEDGER_CACHE["dirty"] or _LEDGER_CACHE["data"] is None:
-        return
-    lock_fd = None
-    try:
-        import fcntl
-        os.makedirs(os.path.dirname(_LEDGER_FILE), mode=0o700, exist_ok=True)
-        lock_fd = os.open(f"{_LEDGER_FILE}.lock", os.O_CREAT | os.O_RDWR, 0o600)
-        fcntl.flock(lock_fd, fcntl.LOCK_EX)
-    except OSError:
-        lock_fd = None
-    try:
-        fresh = _load_ledger_from_disk()
-        memo = _LEDGER_CACHE["data"]
-        for tool, days in memo.get("tools", {}).items():
-            stored = fresh["tools"].setdefault(tool, {})
-            for dk, day in days.items():
-                kept = stored.get(dk)
-                if (kept is None
-                        or _ledger_cost_version(day) > _ledger_cost_version(kept)
-                        or (_ledger_cost_version(day) == _ledger_cost_version(kept)
-                            and _ledger_day_total(day) > _ledger_day_total(kept))):
-                    stored[dk] = day
-        _save_ledger(fresh)
-        _LEDGER_CACHE["data"] = fresh
-        _LEDGER_CACHE["dirty"] = False
-    finally:
-        if lock_fd is not None:
-            try:
-                import fcntl
-                fcntl.flock(lock_fd, fcntl.LOCK_UN)
-            except OSError:
-                pass
-            os.close(lock_fd)
-
-
-def _save_ledger(ledger):
-    tmp = None
-    try:
-        directory = os.path.dirname(_LEDGER_FILE)
-        os.makedirs(directory, mode=0o700, exist_ok=True)
-        fd, tmp = _tempfile.mkstemp(prefix=".ledger-", suffix=".json", dir=directory)
-        with os.fdopen(fd, "w") as f:
-            json.dump(ledger, f, separators=(',', ':'))
-        os.chmod(tmp, 0o600)
-        os.replace(tmp, _LEDGER_FILE)
-    except Exception:
-        if tmp:
-            try:
-                os.unlink(tmp)
-            except OSError:
-                pass
-
-
-def _ledger_day_total(day):
-    """字段无关的当日体量:累加所有数值字段(cost 除外),适配任意工具的 day 结构。"""
-    return sum(float(v) for k, v in day.items()
-               if isinstance(v, (int, float)) and not isinstance(v, bool)
-               and k != "cost" and not k.startswith("_"))
-
-
-def _ledger_cost_version(day):
-    value = day.get("_cost_version", 0) if isinstance(day, dict) else 0
-    return int(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else 0
-
-
-# 账本天的 token 口径:白名单直加字段。cached 不单独相加——所有记录 cached 的工具
-# (codex/gemini/qoder_ide)其 cached 均为 in 的子集,计完整 in 即已"含 cached",
-# 再加一次会重复计数。est/calls/duration/tools/turns/sessions 等计数字段永远不算 token。
-# 该口径与主页各工具卡片的总量一致(如 Codex 卡片 = 非缓存输入+cached+out+reason = in+out+reason)。
-_LEDGER_TOKEN_FIELDS = ("in", "out", "cr", "cw", "reason", "thoughts")
-
-
-def _ledger_token_sum(day):
-    tok = 0
-    for field in _LEDGER_TOKEN_FIELDS:
-        value = day.get(field)
-        if isinstance(value, (int, float)) and not isinstance(value, bool):
-            tok += int(value)
-    return tok
-
-
-def ledger_reconcile(tool, live_days):
-    """对账:live_days={day: day_dict}(现存日志实时聚合,任意字段结构)。
-
-    返回 {day: day_data} 的完整视图:
-    - 实时值 >= 账本值的天:以实时为准,并把账本刷新到实时(高水位上移)
-    - 实时值 < 账本值的天(日志被部分/全部清理):返回账本存档值
-    - 账本独有的天(日志已整体消失):账本兜底
-    天级整取整用,不做字段级混合,天然避免重复计数。
-    纯内存操作;落盘由 compute() 末尾的 ledger_flush() 统一完成(锁内高水位合并)。"""
-    ledger = _load_ledger()
-    stored = ledger["tools"].setdefault(tool, {})
-    dirty = False
-    merged = {}
-    # 日志中偶发的坏时间戳(如 2024-01-08)不入账本,防止污染永久数据
-    max_day = (date.today() + timedelta(days=1)).isoformat()
-    for dk, live in live_days.items():
-        kept = stored.get(dk)
-        kept_version = _ledger_cost_version(kept)
-        live_version = _ledger_cost_version(live)
-        if (kept and kept_version > live_version
-                or (kept and kept_version == live_version
-                    and _ledger_day_total(kept) > _ledger_day_total(live))):
-            merged[dk] = kept
-        else:
-            merged[dk] = live
-            if not ("2025-01-01" <= dk <= max_day):
-                continue
-            snapshot = {k: v for k, v in live.items()
-                        if not isinstance(v, set)}
-            if kept != snapshot:
-                stored[dk] = snapshot
-                dirty = True
-    for dk, kept in stored.items():
-        if dk not in merged:
-            merged[dk] = kept          # 日志已整体消失的天:账本兜底
-    if dirty:
-        _LEDGER_CACHE["dirty"] = True
-    return merged
-
-
-def ledger_touch(tool):
-    """确保账本 tools 中存在该工具的键(暂无数据时写空占位),标记 scanner 已接入。"""
-    try:
-        ledger = _load_ledger()
-        if tool not in ledger.get("tools", {}):
-            ledger.setdefault("tools", {})[tool] = {}
-            _LEDGER_CACHE["dirty"] = True
-    except Exception:
-        pass
-
-
-def _with_scan_cache_lock(fn):
-    def locked(*args, **kwargs):
-        try:
-            import fcntl
-        except ImportError:
-            return fn(*args, **kwargs)
-
-        lock_path = f"{_SCAN_CACHE_FILE}.lock"
-        lock_dir = os.path.dirname(lock_path)
-        if lock_dir:
-            os.makedirs(lock_dir, exist_ok=True)
-        lock_fd = os.open(lock_path, os.O_WRONLY | os.O_CREAT, 0o600)
-        try:
-            fcntl.flock(lock_fd, fcntl.LOCK_EX)
-            return fn(*args, **kwargs)
-        finally:
-            try:
-                fcntl.flock(lock_fd, fcntl.LOCK_UN)
-            finally:
-                os.close(lock_fd)
-    return locked
-
-
-def _cache_dashboard_days(cache, key, days):
-    def serializable(value):
-        if isinstance(value, dict):
-            return {str(k): serializable(v) for k, v in value.items()}
-        if isinstance(value, set):
-            return sorted(serializable(v) for v in value)
-        if isinstance(value, (list, tuple)):
-            return [serializable(v) for v in value]
-        return value
-
-    payload = serializable(days if isinstance(days, dict) else {})
-    if cache.get(key) != payload:
-        cache[key] = payload
-        cache["_dirty"] = True
-
-
-def _merge_dashboard_days(cache, key, days):
-    if not isinstance(days, dict) or not days:
-        return
-    existing = cache.get(key)
-    merged = dict(existing) if isinstance(existing, dict) else {}
-    merged.update(days)
-    _cache_dashboard_days(cache, key, merged)
-
-
-def _iter_cached_token_days(tool_cache):
-    for entry in tool_cache.values():
-        if not isinstance(entry, dict):
-            continue
-        for day_key, day in entry.get("days", {}).items():
-            if isinstance(day, dict):
-                yield day_key, day
-        day = entry.get("day")
-        if isinstance(day, dict) and day.get("date"):
-            yield day["date"], day
-
-
-def _add_model_usage(models, model, inp=0, out=0, cr=0, cw=0, reason=0, cost=0.0):
-    if not model:
-        return
-    mm = models.setdefault(model, {"in": 0, "out": 0, "cr": 0, "cw": 0, "reason": 0, "cost": 0.0})
-    mm["in"] += int(inp or 0); mm["out"] += int(out or 0)
-    mm["cr"] += int(cr or 0); mm["cw"] += int(cw or 0); mm["reason"] += int(reason or 0)
-    mm["cost"] += float(cost or 0)
-
-
-def _add_token_usage(target, inp=0, out=0, cr=0, cw=0, reason=0, cost=0.0, model=None):
-    target["in"] += int(inp or 0); target["out"] += int(out or 0)
-    target["cr"] += int(cr or 0); target["cw"] += int(cw or 0); target["reason"] += int(reason or 0)
-    target["cost"] += float(cost or 0)
-    _add_model_usage(target.get("models", {}), model, inp, out, cr, cw, reason, cost)
-
-
-def _merge_token_day(bucket, day, session=None):
-    if session is not None:
-        bucket["sessions"].add(session)
-    _add_token_usage(bucket, day.get("in", 0), day.get("out", 0), day.get("cr", 0),
-                     day.get("cw", 0), day.get("reason", 0), day.get("cost", 0))
-    for model, mv in day.get("models", {}).items():
-        _add_model_usage(bucket["models"], model, mv.get("in", 0), mv.get("out", 0),
-                         mv.get("cr", 0), mv.get("cw", 0), mv.get("reason", 0), mv.get("cost", 0))
-
-
-def _merge_live_token_day(agg, day):
-    """跨文件合并同日数据(token 字段/models/hours,均 JSON 兼容),用作 ledger 的 live_days。"""
-    _add_token_usage(agg, day.get("in", 0), day.get("out", 0), day.get("cr", 0),
-                     day.get("cw", 0), day.get("reason", 0), day.get("cost", 0))
-    for model, mv in (day.get("models") or {}).items():
-        _add_model_usage(agg["models"], model, mv.get("in", 0), mv.get("out", 0),
-                         mv.get("cr", 0), mv.get("cw", 0), mv.get("reason", 0), mv.get("cost", 0))
-    hours = day.get("hours")
-    if isinstance(hours, list):
-        agg_hours = agg.setdefault("hours", [0] * 24)
-        for hour, amount in enumerate(hours[:24]):
-            agg_hours[hour] += amount
-
-
-def _format_token_models(models, include_prices=True):
-    result = []
-    sort_key = (lambda kv: -kv[1].get("cost", 0)) if include_prices else (
-        lambda kv: -token_total(kv[1]))
-    for n, v in sorted(models.items(), key=sort_key):
-        model_id = _model_identity_id(n)
-        price_id = _exact_pricing_id(model_id) if include_prices else None
-        p = _raw_price(price_id) if price_id else {
-            "in": 0.0, "out": 0.0, "cache_read": 0.0, "cache_write": 0.0}
-        result.append({"model_id": model_id, "name": nice_model(model_id),
-                       "in": v.get("in", 0), "out": v.get("out", 0),
-                        "cr": v.get("cr", 0), "cw": v.get("cw", 0), "reason": v.get("reason", 0),
-                        "cost": v.get("cost", 0), "pin": p["in"], "pout": p["out"]})
-    return result
-
-
-def _safe_scan(name, fn, fallback, errors):
-    try:
-        return fn()
-    except Exception as e:
-        errors[name] = f"{type(e).__name__}: {e}"
-        return fallback()
-
 
 # ---------- Claude Code ----------
 def _claude_event_total(event):
