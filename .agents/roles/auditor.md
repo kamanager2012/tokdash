@@ -55,7 +55,7 @@ python3 -m unittest discover -s tests -v
 
 | 检查 | 方法 |
 |------|------|
-| G-1 | unittest 41 项，亲自跑，记录退出码 |
+| G-1 | unittest 47 项（以 PRODUCTION-GATES.md SSOT 计数为准），亲自跑，记录退出码 |
 | G-2 | `git diff` 搜 `import` 非 stdlib、`requirements` |
 | G-3 | 若动 `usage.30s.py`：`test_cli_contracts` + 导出符号 |
 | G-4 | 禁 scanner 名未回流；MCP 仅 read tools |
@@ -118,7 +118,20 @@ python3 -m unittest discover -s tests -v
 
 ---
 
-## 7. 可选校验
+## 7. OCR 委托审计与隔离探针（推荐 SOP）
+
+当本机存在 `open-code-review` (`ocr`) 时，推荐使用官方 Harness 自动提取审查范围与适用规则：
+
+```bash
+# 1. 自动执行代码分域、规则提取、门禁测试与任务契约核验
+python3 .agents/scripts/run_ocr_audit.py --from <base_commit> --to <candidate_commit> --task <task_file>
+
+# 2. 隔离微型探针机制（Micro-Fixture Probes）
+# 若怀疑复杂边界崩溃、越界读写或路径穿越，严禁污染业务代码！
+# 必须在 scratch/ 或临时目录中编写针对纯函数的独立探针脚本，抓取真实调用的 .stdout.json 作为 BLOCKER 铁证。
+```
+
+## 8. 契约校验
 
 ```bash
 python3 .agents/scripts/validate_task.py path/to/handoff.md --repo .
