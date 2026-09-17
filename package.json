@@ -1,7 +1,6 @@
 {
   "name": "cognitally",
   "version": "0.1.0",
-  "packageManager": "pnpm@11.21.0",
   "description": "Sovereign AI Coding Agent Observability & Token Cost Ledger for Ubuntu/Linux",
   "author": "kamanager2012",
   "license": "MIT",
@@ -59,10 +58,19 @@
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
-    "electron": "^33.2.1",
+    "electron": "^44.4.1",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.16",
     "typescript": "^5.7.2",
     "vite": "^6.0.3"
+  },
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild"
+    ]
   }
 }

@@ -70,10 +70,13 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
+      allowRunningInsecureContent: false,
     }
   });
 
-  const isDev = process.env.TOKDASH_DEV === '1' || process.env.NODE_ENV === 'development';
+  const isDev = process.env.COGNITALLY_DEV === '1' || process.env.TOKDASH_DEV === '1' || process.env.NODE_ENV === 'development';
   const distIndex = path.join(ROOT_DIR, 'dist', 'index.html');
 
   if (fs.existsSync(distIndex)) {
@@ -112,32 +115,26 @@ app.whenReady().then(() => {
   createTray();
   createWindow();
 
-  ipcMain.handle('get-snapshot', async () => {
-    return runPython(['--snapshot']);
-  });
+  const pythonChannels = {
+    'get-snapshot': ['--snapshot'],
+    'get-usage': ['--json'],
+    'get-daily-costs': ['--daily-costs'],
+    'get-projects': ['--projects'],
+    'update-prices': ['--update-prices'],
+  };
 
-  ipcMain.handle('get-usage', async () => {
-    return runPython(['--json']);
-  });
-
-  ipcMain.handle('get-daily-costs', async () => {
-    return runPython(['--daily-costs']);
-  });
-
-  ipcMain.handle('get-projects', async () => {
-    return runPython(['--projects']);
-  });
-
-  ipcMain.handle('update-prices', async () => {
-    return runPython(['--update-prices']);
-  });
+  for (const [channel, args] of Object.entries(pythonChannels)) {
+    ipcMain.handle(channel, async () => runPython(args));
+  }
 
   ipcMain.handle('window-minimize', () => {
     mainWindow?.minimize();
+    return { ok: true };
   });
 
   ipcMain.handle('window-close', () => {
     mainWindow?.hide();
+    return { ok: true };
   });
 
   ipcMain.handle('window-toggle-maximize', () => {
@@ -146,6 +143,7 @@ app.whenReady().then(() => {
     } else {
       mainWindow?.maximize();
     }
+    return { ok: true };
   });
 });
 

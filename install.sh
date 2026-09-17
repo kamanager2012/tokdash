@@ -13,8 +13,13 @@ fi
 
 # 2. 检查 Node.js
 if ! command -v node &>/dev/null; then
-    echo "错误: 未找到 node，请先安装 Node.js (>=18)"
+    echo "错误: 未找到 node，请先安装 Node.js (>=22.12，Electron 44 要求)"
     exit 1
+fi
+NODE_MAJOR=$(node -p "process.versions.node.split('.')[0]" 2>/dev/null || echo 0)
+NODE_MINOR=$(node -p "process.versions.node.split('.')[1]" 2>/dev/null || echo 0)
+if [ "$NODE_MAJOR" -lt 22 ] || { [ "$NODE_MAJOR" -eq 22 ] && [ "$NODE_MINOR" -lt 12 ]; }; then
+    echo "警告: 当前 Node $(node -v)。Electron 44 官方要求 >=22.12；安装可能带 EBADENGINE 警告。"
 fi
 
 cd "$DIR"
@@ -22,7 +27,10 @@ cd "$DIR"
 # 3. 安装依赖（如果 node_modules 不存在）
 if [ ! -d "node_modules" ]; then
     echo "==> 正在安装前端与 Electron 依赖..."
-    pnpm install || npm install
+    # Avoid Node 22 corepack shims (broken keys break `pnpm` / packageManager auto-switch).
+    corepack disable >/dev/null 2>&1 || true
+    echo "==> 使用 npm install"
+    npm install
 fi
 
 echo "==> 正在构建前端界面..."
@@ -32,16 +40,10 @@ echo "==> 正在构建前端界面..."
 chmod +x "$DIR/start.sh"
 BIN_DIR="$HOME/.local/bin"
 mkdir -p "$BIN_DIR"
+# Bake absolute install path into the CLI shim (no hardcoded user home).
 cat << CLI_EOF > "$BIN_DIR/cognitally"
 #!/usr/bin/env bash
-# Canonical Cognitally CLI launcher
-REPO_DIR="$DIR"
-if [ -f "\$REPO_DIR/usage.30s.py" ]; then
-    exec python3 "\$REPO_DIR/usage.30s.py" "\$@"
-else
-    echo "Error: Cognitally core script not found at \$REPO_DIR/usage.30s.py" >&2
-    exit 1
-fi
+exec python3 "$DIR/usage.30s.py" "\$@"
 CLI_EOF
 chmod +x "$BIN_DIR/cognitally"
 ln -sf "$BIN_DIR/cognitally" "$BIN_DIR/tokdash"
