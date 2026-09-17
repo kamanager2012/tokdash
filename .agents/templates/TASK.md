@@ -1,7 +1,24 @@
+---
+task_id: "TASK-YYYYMMDD-ID"
+version: "1.0"
+# status: DRAFT | IN_PROGRESS | SUBMITTED | APPROVED | REJECTED | BLOCKED
+status: "DRAFT"
+role: "implementer"
+# Max 2 handoff rounds before circuit breaker escalation to human
+handoff_round: 1
+# Git Commit SHA before changes (or 'HEAD~1')
+base_commit: "HEAD~1"
+# Git Commit SHA after changes
+candidate_commit: ""
+target_project: "tokdash"
+scope_files:
+    - "core/collectors/xxx.py"
+---
+
 # 单次任务与交接契约模板 (TASK Template v1)
 
 > 目的：在主控协调 (Orchestrator)、功能实现 (Implementer) 与独立审计 (Auditor) 之间建立无歧义、防扯皮、附带可复现证据的唯一交接标准。
-> 约定：小任务可压缩为简明摘要；主控角色应尽可能从现有上下文提取信息填充，避免要求用户手工填写。
+> 约定：小任务可压缩为简明摘要；必须包含上述 YAML Frontmatter 元数据块以便自动化 linter 校验。
 
 ---
 
@@ -47,7 +64,7 @@
 ### 逐项验收对账表
 | 验收编号 | 期望条件 | 实际状态 (`PASS` / `FAIL` / `BLOCKED`) | 证明依据（命令、输出摘要、代码行） |
 | :--- | :--- | :--- | :--- |
-| `AC-1` | ... | PASS | 运行 `pytest ...` 返回 0 |
+| `AC-1` | ... | PASS | `python3 -m unittest discover -s tests -v` 退出码 0 |
 | `AC-2` | ... | PASS | 接口输出符合预期 |
 
 ### 运行环境与实测数据
@@ -62,21 +79,17 @@
 ## 3. 独立审计核验结论（审计角色判定）
 
 > 审计原则：在独立会话中基于固定候选提交进行核实。严禁在当前轮次追加未授权的新需求。
+> 熔断原则：同一任务交接轮次 `handoff_round` 上限为 2 轮；若两轮退回仍无法解决，立刻挂起并上报人类决策者，禁止无限互搏。
 
 | 审查项 | 审计结论 |
 | :--- | :--- |
 | **适用候选版本** | 核验的目标 Git Commit SHA |
 | **综合裁定** | `[满足本次验收关闭]` / `[存在明确阻断退回]` / `[外部证据不足待补充]` |
 
-### 阻断项清单 (仅当退回时填写)
+### 阻断项清单 (仅当退回时填写，必须包含标准 5 要素)
 对每个阻断项必须给出以下五要素，禁止含糊其词：
-1. **对应验收条款 / 硬约束**：
-2. **代码具体位置 (文件与行号)**：
-3. **触发复现条件**：
-4. **实际产生的影响与危害**：
-5. **最小复现命令与真实报错**：
-
-### 审计结论收口
-- **验证覆盖范围**：已审查的文件与执行过的只读/测试命令
-- **未覆盖范围**：未测试的外部依赖或硬件环境
-- **非阻断建议 (`SUGGESTION`)**：列入后续备忘，**不阻碍本任务正常关闭**。
+1. **违反条款**：对应验收条款 / 硬约束（如 `AC-1` 或 `Hard-Gate-2`）
+2. **代码位置**：涉及文件与行号（如 `core/collectors/xxx.py:120`）
+3. **触发条件**：具体复现触发条件
+4. **实际影响**：实际产生的影响与危害证据
+5. **复现依据**：最小复现命令与真实报错日志

@@ -30,6 +30,9 @@
    - 实现者修改代码，产出候选 Commit 与局部测试证据。
    - 独立审计角色基于 Commit SHA 核验，出具 `[PASS]` 结论并关闭任务。
 3. 检查是否有越权写入、跨界修改或多余的无限全仓审计。
+4. **生产级签收附件**（归档到 `docs/handoffs/` 或 TASK 实例）：
+   - 审计输出含 `PRODUCTION-GATES.md` 行为检查表 6 项勾选
+   - `python3 .agents/scripts/validate_task.py handoff.md --repo .` 无 error（`--strict` 可选）
 
 ### 阶段 D：渐进替换与版本固化 (Gradual Rollout)
 1. 所有规则与提示词随 Git 仓库一同版本化演进。

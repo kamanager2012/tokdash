@@ -42,18 +42,12 @@ Claude Code 默认读取 `CLAUDE.md`，不支持原生跨项目通配递归加�
 
 Cursor 支持 `.cursor/rules/*.mdc`。
 
-### 接线方式
-在 `.cursor/rules/team-workflow.mdc` 中配置路由前置：
-```markdown
----
-description: Team Multi-Agent Workflow Guidelines
-globs: *
-alwaysApply: true
----
-遵从项目统一多 Agent 工作流：
-请阅读并遵守 [shared-rules.md](mdc:.agents/rules/shared-rules.md)。
-在执行代码修改时遵循 [implementer.md](mdc:.agents/roles/implementer.md)。
-```
+### 接线方式（已落地）
+
+仓库内文件：**`.cursor/rules/tokdash-workflow.mdc`**（`alwaysApply: true`）。  
+入口：**`AGENTS.md`** → `PRODUCTION-GATES.md` → 角色 `roles/*.md`。
+
+Reload Window 后，Composer 应先读硬门禁再认领角色。若 hooks 未加载，仍须手动 Read 角色全文（文本只读≠物理隔离）。
 
 ---
 

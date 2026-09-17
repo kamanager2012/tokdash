@@ -14,7 +14,7 @@
 | **当前状态入口 (SSOT)** | Git Commit 历史、`tests/` 测试套件与 `usage.30s.py --doctor` |
 | **领域规则入口** | `ARCHITECTURE.md`、`domain_models.py` |
 | **架构基线入口** | `core/` 模块拓扑（`collectors`、`accounting`、`storage`、`pricing`） |
-| **测试与资源限制** | `tests/` 目录；无外部网络测试；不可运行饱和长时压测 |
+| **测试与资源限制** | G-1：`python3 -m unittest discover -s tests -v`（41 项）；无外部网络测试；不可运行饱和长时压测 |
 | **有效操作授权入口** | 用户对话授权记录、已有只读/本地修改授权 |
 
 ---

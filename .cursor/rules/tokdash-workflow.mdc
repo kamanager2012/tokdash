@@ -1,0 +1,14 @@
+---
+description: TokDash 多 Agent 工作流 v2 — 路由到生产级角色提示词与硬门禁
+globs: *
+alwaysApply: true
+---
+
+# TokDash 工作流（生产级）
+
+1. 开工先读：`AGENTS.md` → `.agents/PRODUCTION-GATES.md` → `.agents/rules/shared-rules.md` → `.agents/templates/PROJECT.md`。
+2. 按用户意图认领角色，**全文 Read** `.agents/roles/` 下对应 `*.md` 后再写码或审计。
+3. 首行打角色标签：`[主控]` / `[实现]` / `[审计]` 等（见各角色文件）。
+4. 硬门禁：41 项 `python3 -m unittest discover -s tests -v`；Python 采集核心仅标准库；不破 `usage.30s.py` Facade；MCP 只读。
+5. 实现不得自批；审计 PASS ≠ 发布授权；非阻断一律 `[SUGGESTION]`。
+6. 禁止 Cursor Fast 模式（任何 fast 型号或 fast 开关）。
