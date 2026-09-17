@@ -74,3 +74,20 @@ scope_files:
   3. 物理 Tool ACL 在 `auditor/agent.md` 与 `orchestrator/agent.md` 真实切断写工具。
   4. 审计过程提出的非阻断项（文档描述、命名）均已按建议收敛，无 BLOCKER 阻断。
 - **结论**：**阶段 C 真实任务协作闭环验证完成，工单归档关闭**。
+
+---
+
+## 4. 增量主线核验与 CI 放行补正 (Incremental Mainline Verification)
+
+- **适用版本**：`6dada56`（对应远程 `origin/main` 及 GitHub Actions Run `35195722137`）
+- **变更背景**：
+  1. 合并远程便携脚本 `install.sh` 及配套 `tests/test_install_shim.py`（测试用例增加 2 项）。
+  2. 修复 `test_statusline_and_guardrails.py` 在零开销初始环境下的偶发断言脆弱性。
+  3. G-1 测试基准总数由 41 项正式递增为 **43** 项（同步更新 `PRODUCTION-GATES.md` 与 `AGENTS.md`）。
+- **核验凭据**：
+  - 本地权威执行：`python3 -m unittest discover -s tests -v` ➔ Ran 43 tests, OK（退出码 0）。
+  - GitHub Actions 远端：Run `35195722137` ➔ `python-tests` (43/43 OK), `frontend` (typecheck + build OK)。
+- **交付定级声明（分层 SSOT）**：
+  - **当前状态**：**阶段 A2 达成（工程主线 + CI 验证已绿，工作树干净同步）**。
+  - **边界声明**：本归档仅代表工程主线与自动化 CI 门禁通过，不替代阶段 A3（14 Agent 真机对账与生产发布签署）。严格遵循「工程主线 + CI 已绿，发布级另批」。
+
